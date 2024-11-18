@@ -67,7 +67,7 @@ LOLToken = [
     # Literals
     ('NUMBR', r'\b-?[0-9]+\b'),  # Integer literal
     ('NUMBAR', r'\b-?[0-9]+\.[0-9]+\b'),  # Float literal
-    ('YARN', r'\"[^\"]*\"'),  # String literal
+    ('YARN', r'"[^"]*"'),  # String literal
     ('TROOF', r'\b(WIN|FAIL)\b'),  # Boolean literal
     ('TYPE', r'\b(NOOB|NUMBR|NUMBAR|YARN|TROOF)\b'),  # Data types
 
