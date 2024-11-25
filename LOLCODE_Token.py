@@ -1,4 +1,8 @@
 LOLToken = [
+    # Comments
+    ('SINGLE_LINE_COMMENT', r'BTW[^\n]*'),  # Single-line comments
+    ('MULTI_LINE_COMMENT', r'OBTW.*?TLDR'), #Multi-line comments
+    
     # Keywords (Program start/end)
     ('HAI', r'\bHAI\b'),
     ('KTHXBYE', r'\bKTHXBYE\b'),
@@ -79,5 +83,5 @@ LOLToken = [
     # Whitespace and others
     ('WHITESPACE', r'[ \t]+'),  # Spaces and tabs
     ('NEWLINE', r'\n'),  #  Newlines
-    ('MISMATCH', r'.')  # Any character
+    ('MISMATCH', r'.'),  # Any character  
 ]
