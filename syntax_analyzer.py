@@ -1,7 +1,7 @@
 import tkinter
 from tkinter import filedialog
-from lexical_analyzer import tokenize_lolcode  # Ensure this is implemented correctly
-from LOLCODE_Token import LOLToken  # Ensure this is defined for token types
+from lexical_analyzer import tokenize_lolcode 
+from LOLCODE_Token import LOLToken  
 
 class LOLCodeParser:
     def __init__(self, tokens):
@@ -37,7 +37,7 @@ class LOLCodeParser:
         self.skip_non_essential_tokens()
         if self.get_current_token() and self.get_current_token()[0] == 'HAI':
             self.consume()  # Consume HAI
-            statements = self.statements()  # Parse all statements, including WAZZUP
+            self.statements()  # Parse all statements, including WAZZUP
             self.skip_non_essential_tokens()
             if self.get_current_token() and self.get_current_token()[0] == 'KTHXBYE':
                 self.consume()  # Consume KTHXBYE
@@ -98,7 +98,7 @@ class LOLCodeParser:
                 self.variables[var_name] = expr_result  # Store the variable value
                 print(f"Variable {var_name} initialized to {expr_result}")
             else:
-                self.variables[var_name] = None  # Declare without initialization
+                self.variables[var_name] = 'NOOB'  # Declare without initialization
                 print(f"Variable {var_name} declared but not initialized.")
         else:
             raise SyntaxError('Expected variable identifier')
@@ -120,7 +120,8 @@ class LOLCodeParser:
             if var_name in self.variables:  # dictionary of variable values
                 return self.variables[var_name]
             else:
-                raise SyntaxError(f"Undefined variable {var_name}")
+                return None
+                # raise SyntaxError(f"Undefined variable {var_name}")
         
         elif current_token[0] == 'SUM_OF':
             return self.binary_operation('SUM_OF', '+')
@@ -148,6 +149,9 @@ class LOLCodeParser:
         
         elif current_token[0] == 'SMOOSH':
             return self.smush_operation()
+        
+        # elif current_token[0] == 'VISIBLE':
+        #     return self.visible_statement()
         
         else:
             raise SyntaxError(f"Invalid expression: {current_token}")
@@ -227,13 +231,18 @@ class LOLCodeParser:
 
 
     def visible_statement(self):
-        self.consume()
         """Handle the VISIBLE statement (output to console)."""
         operands = []
         while self.get_current_token() and self.get_current_token()[0] not in ['KTHXBYE', 'BTW']:
-            operands.append(str(self.expression()))  # Cast expressions to string
+            if self.get_current_token()[0] == 'VISIBLE':
+                self.consume()  # Consume additional VISIBLE if it appears redundantly
+            expr_result = self.expression()
+            if expr_result is None:
+                expr_result = "NOOB"  # Default value for uninitialized variables
+            operands.append(str(expr_result))  # Cast expressions to string
             self.skip_non_essential_tokens()
-        print(" + ".join(operands))
+        print("\n".join(operands))
+
 
 
     def gimmeh_statement(self):
@@ -256,8 +265,8 @@ class LOLCodeParser:
 def syntax_analysis(source_code):
     # Tokenize the source code
     tokens = tokenize_lolcode(source_code)
-    for token in tokens:
-        print(token)
+    # for token in tokens:
+    #     print(token)
     parser = LOLCodeParser(tokens)
     try:
         return parser.parse()
