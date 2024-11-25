@@ -40,17 +40,17 @@ def tokenize_lolcode(source_code):
             tokens.append((kind, value, line_number))
     return tokens
 
-lolcode_program = """
-BTW HAI
-I HAS A VAR ITZ 10
-OBTW
-VISIBLE "HELLO WORLD"
-WAAHAHHA
-TLDR
-KTHXBYE
-BTW broo
-"""
+# lolcode_program = """
+# BTW HAI
+# I HAS A VAR ITZ 10
+# OBTW
+# VISIBLE "HELLO WORLD"
+# WAAHAHHA
+# TLDR
+# KTHXBYE
+# BTW broo
+# """
 
-tokens = tokenize_lolcode(lolcode_program)
-for token in tokens:
-    print(token)
+# tokens = tokenize_lolcode(lolcode_program)
+# for token in tokens:
+#     print(token)
