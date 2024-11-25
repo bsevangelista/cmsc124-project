@@ -61,7 +61,7 @@ class LOLCodeParser:
                 self.parse_wazzup()
             
             elif token[0] == 'VISIBLE':
-                self.consume()  # Consume the Visible token
+                # self.consume()  # Consume the Visible token
                 self.visible_statement()
             
             elif token[0] == 'GIMMEH':
@@ -70,7 +70,7 @@ class LOLCodeParser:
             
             else:
                 raise SyntaxError(f"Unexpected token: {token[0]}")
-            
+            self.skip_non_essential_tokens()
 
     def parse_wazzup(self):
         """Parse the WAZZUP section for variable declarations."""
@@ -150,9 +150,6 @@ class LOLCodeParser:
         elif current_token[0] == 'SMOOSH':
             return self.smush_operation()
         
-        # elif current_token[0] == 'VISIBLE':
-        #     return self.visible_statement()
-        
         else:
             raise SyntaxError(f"Invalid expression: {current_token}")
 
@@ -231,17 +228,18 @@ class LOLCodeParser:
 
 
     def visible_statement(self):
-        """Handle the VISIBLE statement (output to console)."""
-        operands = []
-        while self.get_current_token() and self.get_current_token()[0] not in ['KTHXBYE', 'BTW']:
-            if self.get_current_token()[0] == 'VISIBLE':
-                self.consume()  # Consume additional VISIBLE if it appears redundantly
-            expr_result = self.expression()
+        """Handle the VISIBLE statement (output to console) for one line at a time."""
+        if self.get_current_token() and self.get_current_token()[0] == 'VISIBLE':
+            self.consume()  # Consume the VISIBLE token
+        
+        # Process a single line of output
+        if self.get_current_token() and self.get_current_token()[0] not in ['KTHXBYE', 'BTW', 'GIMMEH']:
+            expr_result = self.expression()  # Evaluate the expression
             if expr_result is None:
                 expr_result = "NOOB"  # Default value for uninitialized variables
-            operands.append(str(expr_result))  # Cast expressions to string
-            self.skip_non_essential_tokens()
-        print("\n".join(operands))
+            print(expr_result)  # Print the result of the expression
+        else:
+            raise SyntaxError("Expected an expression after VISIBLE")
 
 
 
@@ -251,12 +249,9 @@ class LOLCodeParser:
 
         if token and token[0] == 'VAR_ID':  # Ensure the next token is a variable
             var_name = token[1]
-            if self.is_valid_variable_name(var_name):
-                self.consume()  # Consume the variable name token
-                user_input = input("Input for {}: ".format(var_name))  # Get input from the user
-                self.variables[var_name] = str(user_input)  # Store input as a YARN (string)
-            else:
-                raise SyntaxError(f"Invalid variable name for GIMMEH: {var_name}")
+            self.consume()  # Consume the variable name token
+            user_input = input("Input for {}: ".format(var_name))  # Get input from the user
+            self.variables[var_name] = str(user_input)  # Store input as a YARN (string)
         else:
             raise SyntaxError('Expected a variable after GIMMEH')
 
