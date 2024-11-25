@@ -40,6 +40,7 @@ LOLToken = [
     ('SMOOSH', r'\bSMOOSH\b'),
     ('MAEK', r'\bMAEK\b'),
     ('A', r'\bA\b'),
+    ('AN', r'\bAN\b'),
     ('IS_NOW_A', r'\bIS NOW A\b'),
     ('VISIBLE', r'\bVISIBLE\b'),
     ('GIMMEH', r'\bGIMMEH\b'),
