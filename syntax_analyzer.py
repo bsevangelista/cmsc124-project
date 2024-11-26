@@ -197,8 +197,39 @@ class LOLCodeParser:
         elif current_token[0] == 'MAEK':
             return self.maek_expression()
         
+        elif current_token[0] == 'BOTH_SAEM':
+            return self.comparison_operation('BOTH_SAEM')
+        
+        elif current_token[0] == 'DIFFRINT':
+            return self.comparison_operation('DIFFRINT')
+        
         # Return None for non-expression tokens
         return SyntaxError(f"Invalid expression: {current_token}")
+    
+    def comparison_operation(self, operation):
+        """Handle comparison operations."""
+        self.consume()  # Consume the comparison token (e.g., BOTH_SAEM or DIFFRINT)
+        self.skip_non_essential_tokens()
+        
+        # Parse the first operand
+        left_operand = self.expression()
+        self.skip_non_essential_tokens()
+        
+        # Expect and consume 'AN'
+        if self.get_current_token()[0] != 'AN':
+            raise SyntaxError(f"Expected 'AN' after {operation}")
+        self.consume()  # Consume AN
+        
+        # Parse the second operand
+        right_operand = self.expression()
+        
+        # Perform the comparison
+        if operation == 'BOTH_SAEM':
+            return left_operand == right_operand
+        elif operation == 'DIFFRINT':
+            return left_operand != right_operand
+        else:
+            raise SyntaxError(f"Unknown comparison operation: {operation}")
     
     def maek_expression(self):
         """Handle MAEK typecasting for expressions."""
@@ -342,7 +373,7 @@ class LOLCodeParser:
                 result.append("NOOB")  # Default to "NOOB" for uninitialized variables
             else:
                 # Remove quotation marks if the result is a string (YARN)
-                if (expr_result.startswith('"') and expr_result.endswith('"')):
+                if isinstance(expr_result, str) and (expr_result.startswith('"') and expr_result.endswith('"')):
                     result.append(expr_result[1:-1])  # Strip the quotes
                 else:
                     result.append(str(expr_result))  # Convert to string for other types
