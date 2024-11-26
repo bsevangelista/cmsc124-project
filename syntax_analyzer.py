@@ -58,27 +58,22 @@ class LOLCodeParser:
         """Parse a sequence of statements."""
         while self.get_current_token() is not None and self.get_current_token()[0] not in ['KTHXBYE']:
             token = self.get_current_token()
-            print('entered statements')
+            # print('entered statements')
             
             if token[0] in ['SINGLE_LINE_COMMENT', 'MULTI_LINE_COMMENT']:
-                self.consume()  # Skip comments
-            
+                self.consume()  # Skip comments         
             elif token[0] == 'WAZZUP':
-                print('entered wazzup')
+                # print('entered wazzup')
                 self.consume()
-                self.parse_wazzup()
-            
+                self.parse_wazzup()   
             elif token[0] == 'VISIBLE':
-                self.visible_statement()
-            
+                self.visible_statement()      
             elif token[0] == 'GIMMEH':
-                print('entered gimmeh')
+                # print('entered gimmeh')
                 self.consume()
-                self.gimmeh_statement()
-            
+                self.gimmeh_statement()       
             elif token[0] == 'VAR_ID':
-                self.assignment_statement()
-            
+                self.assignment_statement()       
             else:
                 raise SyntaxError(f"Unexpected token: {token}")
             
@@ -99,12 +94,12 @@ class LOLCodeParser:
         else:
             raise SyntaxError('Expected BUHBYE to close the WAZZUP section')
 
-
     def variable_declaration(self):
         """Handle the declaration of variables with expressions."""
         if self.get_current_token()[0] == 'VAR_ID':
             var_name = self.get_current_token()[1]  # Get variable name
             self.consume()  # Consume the variable identifier
+
             if self.get_current_token()[0] == 'ITZ':
                 self.consume()
                 expr_result = self.expression()  # Handle expression for initialization
@@ -121,24 +116,24 @@ class LOLCodeParser:
         if self.get_current_token()[0] == 'VAR_ID':
             var_name = self.get_current_token()[1]
             self.consume()  # Consume the variable identifier
-            print(self.get_current_token())
+            # print(self.get_current_token())
 
             if self.get_current_token()[0] == 'R':
-                print('matched R')
+                # print('matched R')
                 self.consume()  # Consume the R token
                 value = self.expression()  # Parse the expression
                 self.variables[var_name] = value  # Assign value to variable
-                print(f"Assigned {value} to {var_name}")
+                # print(f"Assigned {value} to {var_name}")
 
             elif self.get_current_token()[0] == 'IS_NOW_A':
-                print('matched IS_NOW_A')
+                # print('matched IS_NOW_A')
                 self.consume()  # Consume 'IS_NOW_A'
                 target_type = self.get_current_token()
                 if target_type[0] in ['NUMBR', 'NUMBAR', 'YARN', 'TROOF', 'TYPE']:
                     self.consume()  # Consume the type
                     if var_name in self.variables:
-                        self.variables[var_name] = self.cast_value(self.variables[var_name], target_type[0])
-                        print(f"Variable {var_name} recast to {target_type[1]}")
+                        self.variables[var_name] = self.cast_value(self.variables[var_name], target_type[1])
+                        # print(f"Variable {var_name} recast to {target_type[1]}")
                     else:
                         raise SyntaxError(f"Undefined variable: {var_name}")
                 else:
@@ -167,11 +162,12 @@ class LOLCodeParser:
     def expression(self):
         """Parse expressions (handles operations, literals, and variables)."""
         current_token = self.get_current_token()
-        print('entered expressions')
+        # print('entered expressions')
 
         if current_token is None:
             raise SyntaxError("Unexpected end of input in expression")
         
+        # Handle literals
         if current_token[0] in ['NUMBR', 'NUMBAR', 'YARN', 'TROOF']:
             return self.consume_literal()
         
@@ -197,6 +193,7 @@ class LOLCodeParser:
         elif current_token[0] == 'SMOOSH':
             return self.smush_operation()
         
+        # Handle MAEK
         elif current_token[0] == 'MAEK':
             return self.maek_expression()
         
@@ -216,24 +213,8 @@ class LOLCodeParser:
             self.consume()  # Consume the type token
             
             # Typecast and return result to IT (not modifying the variable itself)
-            return self.typecast(expr_result, target_type)
+            return self.cast_value(expr_result, target_type)
 
-        
-    def typecast(self, value, target_type):
-        """Typecast a value to the specified target type."""
-        if target_type == 'NUMBR':
-            return int(value)
-        elif target_type == 'NUMBAR':
-            return float(value)
-        elif target_type == 'YARN':
-            return str(value)
-        elif target_type == 'TROOF':
-            return bool(value)
-        else:
-            raise SyntaxError(f"Unknown type {target_type}")
-
-
-        
     def operator_map(self, operation):
         """Map LOLCODE operations to Python operators."""
         return {
@@ -264,49 +245,51 @@ class LOLCodeParser:
         self.skip_non_essential_tokens()
         left_operand = self.expression()  # Left operand
         self.skip_non_essential_tokens()
+
         if self.get_current_token()[0] != 'AN':
             raise SyntaxError(f"Expected 'AN' after {operation}")
+        
         self.consume()  # Consume AN
         right_operand = self.expression()  # Right operand
         
         # Perform operation based on the operator
         result = self.perform_operation(left_operand, right_operand, operator)
-        print(f"Operation result: {left_operand} {operator} {right_operand} = {result}")
+        # print(f"Operation result: {left_operand} {operator} {right_operand} = {result}")
         return result
-
 
     def unary_operation(self, operation):
         """Handle unary operations like NOT."""
         self.consume()  # Consume the NOT token
         operand = self.expression()  # Operand for NOT
-        print(f"NOT {operand}")
+        # print(f"NOT {operand}")
         return not operand
 
     def smush_operation(self):
         """Handle SMOOSH operation with infinite operands."""
         if self.get_current_token() and self.get_current_token()[0] == 'SMOOSH':
-            print("matched smoosh")
+            # print("matched smoosh")
             self.consume()  # Consume the 'SMOOSH' token
 
         operands = []
 
         while self.get_current_token():
-            print('entered smoosh')
+            # print('entered smoosh')
             current_token = self.get_current_token()
-
-            # Debug: Print current token
-            print(f"Processing token: {current_token}")
+            # print(f"Processing token: {current_token}")
 
             # Break the loop if the next token is not 'AN'
             next_token = self.peek_next_token()
             if current_token[0] == 'AN':
                 self.consume()
+            
             # Skip 'AN' tokens
             elif next_token is None or next_token[0] != 'AN':
-                return
-        
+                result = ''.join(str(operand) for operand in operands)
+                # print(f"SMOOSH result: {result}")
+                return result
+            
             # Parse the operand
-            operand = self.expression()  # Ensure this method consumes the operand token
+            operand = self.expression() 
             if operand is not None:
                 operands.append(operand)
             else:
@@ -316,9 +299,8 @@ class LOLCodeParser:
 
         # Concatenate operands into a single string
         result = ''.join(str(operand) for operand in operands)
-        print(f"SMOOSH result: {result}")
+        # print(f"SMOOSH result: {result}")
         return result
-
 
     def perform_operation(self, left_operand, right_operand, operator):
         """Perform the operation with correct typecasting."""
@@ -344,8 +326,8 @@ class LOLCodeParser:
         else:
             raise SyntaxError(f"Unknown operator {operator}")
 
-
     def visible_statement(self):
+        # print('entered visible statement')
         """Handle the VISIBLE statement with infinite arity or a single expression."""
         if self.get_current_token() and self.get_current_token()[0] == 'VISIBLE':
             self.consume()  # Consume the 'VISIBLE' token
@@ -361,15 +343,13 @@ class LOLCodeParser:
 
         # Continue parsing additional operands
         while self.get_current_token():
-            print('entered visible')
+            # print('entered visible')
             token = self.get_current_token()
+            # print(f"Processing token: {token}")
 
-            # Debugging: Print current token being processed
-            print(f"Processing token: {token}")
-
-            # Handle 'AN' (separator between operands)
+            # Handle 'AN'
             if token[0] == 'AN':
-                print('matched AN')
+                # print('matched AN')
                 self.consume()  # Consume the 'AN' token
                 self.skip_non_essential_tokens()  # Skip any non-essential tokens like whitespace
 
@@ -377,26 +357,21 @@ class LOLCodeParser:
                 next_token = self.peek_next_token()
                 if next_token is None or next_token[0] in ['SUM_OF', 'DIFF_OF', 'PRODUKT_OF', 'QUOSHUNT_OF', 'MOD_OF', 'BIGGR_OF', 'SMALLR_OF']:
                     continue  # If the next token is an operator, continue without breaking
-                
-                # Parse the next expression or operand
-                expr_result = self.expression()
-                # Handle invalid expressions gracefully
-                if expr_result is None:
-                    result.append("NOOB")  # Default to "NOOB" for uninitialized variables
-                else:
-                    result.append(str(expr_result))  # Convert to string (YARN)
-
             else:
-                # If we don't encounter 'AN', break the loop
                 break
+
+            # Parse the next expression or operand
+            expr_result = self.expression()
+            # Handle invalid expressions
+            if expr_result is None:
+                result.append("NOOB")  # Default to "NOOB" for uninitialized variables
+            else:
+                result.append(str(expr_result))  # Convert to string (YARN)
 
         # Concatenate all results with a '+' separator for the final output
         final_result = '+'.join(result)
-        print(final_result)  # Automatically adds a new line to the output
+        print(final_result) 
         return
-
-
-
 
     def gimmeh_statement(self):
         """Handle the GIMMEH statement (accept input)."""
