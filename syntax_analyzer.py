@@ -334,21 +334,25 @@ class LOLCodeParser:
 
         result = []  # Store the results of all operands
 
-        # Parse the first expression or operand
-        expr_result = self.expression()
-        if expr_result is None:
-            result.append("NOOB")  # Default to "NOOB" for uninitialized variables
-        else:
-            result.append(str(expr_result))  # Convert to string (YARN)
-
         # Continue parsing additional operands
         while self.get_current_token():
+            expr_result = self.expression()
+            # Handle invalid expressions
+            if expr_result is None:
+                result.append("NOOB")  # Default to "NOOB" for uninitialized variables
+            else:
+                # Remove quotation marks if the result is a string (YARN)
+                if (expr_result.startswith('"') and expr_result.endswith('"')):
+                    result.append(expr_result[1:-1])  # Strip the quotes
+                else:
+                    result.append(str(expr_result))  # Convert to string for other types
+
             # print('entered visible')
             token = self.get_current_token()
             # print(f"Processing token: {token}")
 
             # Handle 'AN'
-            if token[0] == 'AN':
+            if token[0] in ['AN', '+']:
                 # print('matched AN')
                 self.consume()  # Consume the 'AN' token
                 self.skip_non_essential_tokens()  # Skip any non-essential tokens like whitespace
@@ -360,18 +364,9 @@ class LOLCodeParser:
             else:
                 break
 
-            # Parse the next expression or operand
-            expr_result = self.expression()
-            # Handle invalid expressions
-            if expr_result is None:
-                result.append("NOOB")  # Default to "NOOB" for uninitialized variables
-            else:
-                result.append(str(expr_result))  # Convert to string (YARN)
-
         # Concatenate all results with a '+' separator for the final output
         final_result = '+'.join(result)
         print(final_result) 
-        return
 
     def gimmeh_statement(self):
         """Handle the GIMMEH statement (accept input)."""
