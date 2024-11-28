@@ -58,7 +58,7 @@ class LOLCodeParser:
         """Parse a sequence of statements."""
         while self.get_current_token() is not None and self.get_current_token()[0] not in ['KTHXBYE']:
             token = self.get_current_token()
-            # print('entered statements')
+            # print(token)
             
             if token[0] in ['SINGLE_LINE_COMMENT', 'MULTI_LINE_COMMENT']:
                 self.consume()  # Skip comments         
@@ -378,25 +378,23 @@ class LOLCodeParser:
                 else:
                     result.append(str(expr_result))  # Convert to string for other types
 
+            # print(result)
             # print('entered visible')
             token = self.get_current_token()
             # print(f"Processing token: {token}")
 
             # Handle 'AN'
-            if token[0] in ['AN', '+']:
-                # print('matched AN')
+            token = self.get_current_token()
+            if token and token[0] == 'CONCAT':
+                self.consume()  # Consume the '+' token
+            elif token and token[0] == 'AN':
                 self.consume()  # Consume the 'AN' token
                 self.skip_non_essential_tokens()  # Skip any non-essential tokens like whitespace
-
-                # Look ahead to check if there is a valid expression or operator
-                next_token = self.peek_next_token()
-                if next_token is None or next_token[0] in ['SUM_OF', 'DIFF_OF', 'PRODUKT_OF', 'QUOSHUNT_OF', 'MOD_OF', 'BIGGR_OF', 'SMALLR_OF']:
-                    continue  # If the next token is an operator, continue without breaking
             else:
                 break
 
         # Concatenate all results with a '+' separator for the final output
-        final_result = '+'.join(result)
+        final_result = ' '.join(result)
         print(final_result) 
 
     def gimmeh_statement(self):

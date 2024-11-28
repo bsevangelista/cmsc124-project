@@ -82,6 +82,7 @@ LOLToken = [
     ('LOOP_ID', r'\b[a-zA-Z][a-zA-Z0-9_]*\b'),  # Loop identifier
 
     # Whitespace and others
+    ('CONCAT', r'\+'),  
     ('WHITESPACE', r'[ \t]+'),  # Spaces and tabs
     ('NEWLINE', r'\n'),  #  Newlines
     ('MISMATCH', r'.'),  # Any character  
