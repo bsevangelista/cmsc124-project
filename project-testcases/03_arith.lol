@@ -8,6 +8,7 @@ HAI
     GIMMEH x
     GIMMEH y
 
+    VISIBLE x + "+" + y + " = " + SUM OF x AN y
     VISIBLE x + "-" + y + " = " + DIFF OF x AN y
     VISIBLE x + "*" + y + " = " + PRODUKT OF x AN y
     VISIBLE x + "/" + y + " = " + QUOSHUNT OF x AN y
