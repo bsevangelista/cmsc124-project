@@ -5,18 +5,17 @@ from enum import Enum, auto
 from typing import List, Tuple, Optional, Union
 from lexical_analyzer import tokenize_lolcode 
 
-# TODOS
-# linebreaks - need den icheck pero tinanggal ko muna sila sa lexical analyzer
-# check for valid tokens - correct spellings
-# check for required token at start of statements (eg, VISIBLE, GIMMEH, WAZZUP) - parse statements
-# check for expected var_id operands in comparison [test case 6]
-# if token is var_id in parse_statements - parse assignment | parse recasting
-# parse recasting (IS NOW A) [test case 4]
-# infinite arity for smoosh and visible [test case 4]
-# parse boolean operation [test case 5]
-# other parsers
- 
-# Reusing the NodeType and ASTNode from the previous syntax analyzer
+# TODO:
+#     linebreaks - need den icheck pero tinanggal ko muna sila sa lexical analyzer
+#     check for valid tokens - correct spellings
+#     check for required token at start of statements (eg, VISIBLE, GIMMEH, WAZZUP) - parse statements
+#     check for expected var_id operands in comparison [test case 6]
+#     if token is var_id in parse_statements - parse assignment | parse recasting
+#     parse recasting (IS NOW A) [test case 4]
+#     infinite arity for smoosh and visible [test case 4]
+#     parse boolean operation [test case 5]
+#     other parsers
+#     Reusing the NodeType and ASTNode from the previous syntax analyzer
 class NodeType(Enum):
     PROGRAM = auto()
     STATEMENT_LIST = auto()
@@ -82,15 +81,17 @@ class LOLCODESyntaxAnalyzer:
         return None
     
     def consume(self, expected_type: str = None) -> Tuple[str, str, int]:
-        if self.current_token_index >= len(self.tokens):
-            raise SyntaxError("Unexpected end of input")
-        
-        token = self.tokens[self.current_token_index]
-        if expected_type and token[0] != expected_type:
-            raise SyntaxError(f"Expected {expected_type}, found {token[0]} at line {token[2]}")
-        
-        self.current_token_index += 1
-        return token
+        while self.current_token_index < len(self.tokens):
+            token = self.tokens[self.current_token_index]
+            if token[0] == 'NEWLINE' and expected_type != 'NEWLINE':
+                self.current_token_index += 1
+                continue  # Skip newlines until it see the expected type
+            if expected_type and token[0] != expected_type:
+                raise SyntaxError(f"Expected {expected_type}, found {token[0]} at line {token[2]}")
+            self.current_token_index += 1
+            # print(token)
+            return token
+        raise SyntaxError("Unexpected end of input")
     
     def parse_linebreak(self):
         """Parse <linebreak> ::= \n | \n <linebreak>."""
@@ -118,11 +119,9 @@ class LOLCODESyntaxAnalyzer:
             if statement:
                 statements.append(statement)
             
-            # Consume newline or break if no more statements
-            if self.peek() and self.peek()[0] == 'NEWLINE':
+            # Automatically skip newlines
+            while self.peek() and self.peek()[0] == 'NEWLINE':
                 self.consume('NEWLINE')
-            else:
-                break
         
         return ASTNode(NodeType.STATEMENT_LIST, children=statements)
     
@@ -177,7 +176,7 @@ class LOLCODESyntaxAnalyzer:
                 declarations.append(ASTNode(NodeType.DECLARATION, value=var_token[1]))
                 self.symbol_table.add_variable(var_token[1], 'NOOB')
             
-            if self.peek() and self.peek()[0] == 'NEWLINE':
+            while self.peek() and self.peek()[0] == 'NEWLINE':
                 self.consume('NEWLINE')
         
         self.consume('BUHBYE')

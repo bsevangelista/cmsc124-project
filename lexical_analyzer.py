@@ -20,7 +20,7 @@ def tokenize_lolcode(source_code):
         if kind == 'WHITESPACE' or kind == 'NEWLINE':
             if kind == 'NEWLINE':
                 line_number += 1  # Track line numbers
-                # tokens.append((kind, '\n', line_number))
+                tokens.append((kind, '\n', line_number))
             continue  # Skip whitespace and newlines
         elif kind in {'SINGLE_LINE_COMMENT', 'MULTI_LINE_COMMENT'}:
             # Extract and process the comment text
