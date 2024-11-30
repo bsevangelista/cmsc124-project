@@ -323,10 +323,18 @@ class LOLCODESyntaxAnalyzer:
         if not token:
             raise SyntaxError("Unexpected end of input")
         
+        # Add boolean expression handling
+        boolean_ops = {
+            'NOT', 'BOTH_OF', 'EITHER_OF', 'WON_OF', 
+            'ALL_OF', 'ANY_OF'
+        }
+        
         if token[0] == 'VAR_ID':
             return ASTNode(NodeType.EXPRESSION, value=self.consume('VAR_ID')[1])
         elif token[0] in {'NUMBR', 'NUMBAR', 'YARN', 'TROOF'}:
             return ASTNode(NodeType.LITERAL, value=self.consume()[1])
+        elif token[0] in boolean_ops:
+            return self.parse_boolean_expr()
         elif token[0] in {'SUM_OF', 'DIFF_OF', 'PRODUKT_OF', 'QUOSHUNT_OF', 'MOD_OF', 'BIGGR_OF', 'SMALLR_OF', 'SMOOSH'}:
             return self.parse_operation()
         elif token[0] in {'BOTH_SAEM', 'DIFFRINT'}:
@@ -335,6 +343,75 @@ class LOLCODESyntaxAnalyzer:
             return self.parse_typecasting()
         
         raise SyntaxError(f"Unexpected token in expression: {token}")
+    
+    def parse_boolean_expr(self) -> ASTNode:
+        """ Parse complex boolean expressions in LOLCODE """
+        token = self.peek()
+        
+        # Handle basic boolean literals
+        if token[0] in {'TROOF'}:
+            return ASTNode(NodeType.LITERAL, value=self.consume()[1])
+        
+        # Handle NOT operation
+        if token[0] == 'NOT':
+            self.consume('NOT')
+            expr = self.parse_boolean_expr()
+            return ASTNode(NodeType.BOOLEAN_OPERATION, value='NOT', children=[expr])
+        
+        # Handle binary boolean operations
+        binary_ops = {
+            'BOTH_OF': 'AND',
+            'EITHER_OF': 'OR',
+            'WON_OF': 'XOR'
+        }
+        
+        if token[0] in binary_ops:
+            op = self.consume()[0]
+            left = self.parse_boolean_expr()
+            self.consume('AN')
+            right = self.parse_boolean_expr()
+            return ASTNode(NodeType.BOOLEAN_OPERATION, 
+                        value=binary_ops[op], 
+                        children=[left, right])
+        
+        # Handle multi-arity operations: ALL OF and ANY OF
+        if token[0] in {'ALL_OF', 'ANY_OF'}:
+            op = self.consume()[0]
+            expressions = []
+            
+            # Collect expressions until MKAY
+            while self.peek() and self.peek()[0] != 'MKAY':
+                expr = self.parse_boolean_expr()
+                expressions.append(expr)
+                
+                # Consume AN if present
+                if self.peek() and self.peek()[0] == 'AN':
+                    self.consume('AN')
+            
+            # Consume MKAY
+            self.consume('MKAY')
+            
+            return ASTNode(NodeType.BOOLEAN_OPERATION, 
+                        value='ALL' if op == 'ALL_OF' else 'ANY', 
+                        children=expressions)
+        
+        # Recursive handling of nested boolean expressions
+        if token[0] == 'BOTH_OF':
+            self.consume('BOTH_OF')
+            left = self.parse_boolean_expr()
+            self.consume('AN')
+            right = self.parse_boolean_expr()
+            return ASTNode(NodeType.BOOLEAN_OPERATION, value='AND', children=[left, right])
+        
+        if token[0] == 'EITHER_OF':
+            self.consume('EITHER_OF')
+            left = self.parse_boolean_expr()
+            self.consume('AN')
+            right = self.parse_boolean_expr()
+            return ASTNode(NodeType.BOOLEAN_OPERATION, value='OR', children=[left, right])
+        
+        # Fallback to regular expression parsing
+        return self.parse_expression()
     
     def parse_if_statement(self) -> ASTNode:
         condition = self.parse_expression()
