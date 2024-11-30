@@ -46,10 +46,13 @@ LOLToken = [
     ('GIMMEH', r'\bGIMMEH\b'),
 
     # Keywords (Conditionals)
-    ('O_RLY', r'\bO RLY\?\b'),
+    ('O_RLY', r'\bO RLY\?'),
     ('YA_RLY', r'\bYA RLY\b'),
     ('MEBBE', r'\bMEBBE\b'),
     ('NO_WAI', r'\bNO WAI\b'),
+    ('WTF', r'\bWTF\?'),
+    ('OMGWTF', r'\bOMGWTF\b'),
+    ('OMG', r'\bOMG\b'),
     ('OIC', r'\bOIC\b'),
 
     # Keywords (Loops)
