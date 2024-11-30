@@ -6,13 +6,10 @@ from typing import List, Tuple, Optional, Union
 from lexical_analyzer import tokenize_lolcode 
 
 # TODO:
-#     linebreaks - need den icheck pero tinanggal ko muna sila sa lexical analyzer
 #     check for valid tokens - correct spellings
 #     check for required token at start of statements (eg, VISIBLE, GIMMEH, WAZZUP) - parse statements
 #     check for expected var_id operands in comparison [test case 6]
 #     if token is var_id in parse_statements - parse assignment | parse recasting
-#     parse recasting (IS NOW A) [test case 4]
-#     infinite arity for smoosh and visible [test case 4]
 #     parse boolean operation [test case 5]
 #     other parsers
 #     Reusing the NodeType and ASTNode from the previous syntax analyzer
@@ -80,6 +77,15 @@ class LOLCODESyntaxAnalyzer:
             return self.tokens[self.current_token_index]
         return None
     
+    def peek_next(self):
+        """
+        Peek at the token after the current token without consuming it.
+        """
+        next_index = self.current_token_index + 1
+        if next_index < len(self.tokens):
+            return self.tokens[next_index]
+        return None
+    
     def consume(self, expected_type: str = None) -> Tuple[str, str, int]:
         while self.current_token_index < len(self.tokens):
             token = self.tokens[self.current_token_index]
@@ -112,9 +118,17 @@ class LOLCODESyntaxAnalyzer:
         self.consume('KTHXBYE')
         return ASTNode(NodeType.PROGRAM, children=[statement_list])
     
-    def parse_statement_list(self) -> ASTNode:
+    def parse_statement_list(self, allow_gtfo: bool = False) -> ASTNode:
+        """Parse a list of statements with optional GTFO support
+        :param allow_gtfo: Whether to allow GTFO (break) statement """
         statements = []
-        while self.peek() and self.peek()[0] != 'KTHXBYE':
+        while self.peek() and self.peek()[0] not in {'KTHXBYE', 'OIC', 'OMGWTF', 'OMG'}:
+            # Check for GTFO if allowed
+            if allow_gtfo and self.peek() and self.peek()[0] == 'GTFO':
+                self.consume('GTFO')
+                statements.append(ASTNode(NodeType.STATEMENT_LIST, value='BREAK'))
+                break
+            
             statement = self.parse_statement()
             if statement:
                 statements.append(statement)
@@ -142,21 +156,70 @@ class LOLCODESyntaxAnalyzer:
             'IM_IN_YR': self.parse_loop,
             'HOW_IZ_I': self.parse_function_definition,
             'I_IZ': self.parse_function_call,
-            'BTW': self.parse_comment,
-            'OBTW': self.parse_multi_line_comment,
+            # 'BTW': self.parse_comment,
+            # 'OBTW': self.parse_multi_line_comment,
             'MAEK': self.parse_typecasting,
             'IS_NOW_A': self.parse_recasting,
             'FOUND_YR': self.parse_function_return,
-            'VAR_ID': self.parse_assignment
+            'VAR_ID': self.handle_var_id,
+            'GTFO': lambda: ASTNode(NodeType.STATEMENT_LIST, value='BREAK')  # Break statement
         }
         
         parser = statement_parsers.get(token[0])
         return parser() if parser else None
     
+    def handle_var_id(self):      
+        # next_token = self.peek_next()  # Peek at the next token to decide what to do
+        # if next_token and next_token[0] == 'R':
+        #     return self.parse_assignment()
+        # elif next_token and next_token[0] == 'IS_NOW_A':
+        #     return self.parse_recasting()
+        # else:
+        #     raise SyntaxError(f"Unexpected token after variable: {next_token}")
+
+        var_token = self.consume('VAR_ID')
+    
+        # Peek next token to determine the type of statement
+        next_token = self.peek()
+        
+        if not next_token:
+            # Simple variable reference
+            return ASTNode(NodeType.EXPRESSION, value=var_token[1])
+        
+        if next_token[0] == 'R':
+            # Assignment
+            self.consume('R')
+            value = self.parse_expression()
+            return ASTNode(NodeType.ASSIGNMENT, value=var_token[1], children=[value])
+        
+        if next_token[0] == 'IS_NOW_A':
+            # Recasting
+            return self.parse_recasting(var_token[1])
+        
+        # If no special handling, treat as simple expression
+        return ASTNode(NodeType.EXPRESSION, value=var_token[1])
+
+        
     def parse_print(self) -> ASTNode:
         self.consume('VISIBLE')
-        expr = self.parse_expression()
-        return ASTNode(NodeType.PRINT, children=[expr])
+        # expr = self.parse_expression()
+        # return ASTNode(NodeType.PRINT, children=[expr])
+    
+        # Support for infinite arity print
+        expressions = []
+        while True:
+            expr = self.parse_expression()
+            expressions.append(expr)
+            
+            # Check if there are more expressions to print
+            if self.peek() and self.peek()[0] == 'AN':
+                self.consume('AN')
+            elif self.peek() and self.peek()[0] == 'CONCAT':
+                self.consume('CONCAT')
+            else:
+                break
+        
+        return ASTNode(NodeType.PRINT, children=expressions)
     
     def parse_declaration(self) -> ASTNode:
         self.consume('WAZZUP')
@@ -207,9 +270,38 @@ class LOLCODESyntaxAnalyzer:
         }
         
         op_type = self.consume()[0]
+
+        # Special handling for SMOOSH with infinite arity
+        if op_type == 'SMOOSH':
+            expressions = []
+            while True:
+                expr = self.parse_expression()
+                expressions.append(expr)
+                
+                # Check if there are more expressions
+                if self.peek() and self.peek()[0] == 'AN':
+                    self.consume('AN')
+                else:
+                    break
+            
+            return ASTNode(NodeType.OPERATION, value=operations[op_type], children=expressions)
+    
+        # Existing binary operation parsing
         left = self.parse_expression()
         self.consume('AN')
         right = self.parse_expression()
+
+        # Support for additional expressions in some operations (like MOD_OF)
+        # additional_expressions = []
+        # while self.peek() and self.peek()[0] == 'AN':
+        #     self.consume('AN')
+        #     additional_expr = self.parse_expression()
+        #     additional_expressions.append(additional_expr)
+        
+        # # Combine expressions
+        # children = [left, right] + additional_expressions
+        
+        # return ASTNode(NodeType.OPERATION, value=operations[op_type], children=children)
         
         return ASTNode(NodeType.OPERATION, value=operations[op_type], children=[left, right])
     
@@ -279,38 +371,171 @@ class LOLCODESyntaxAnalyzer:
     
     # Placeholder methods for advanced parsing
     def parse_switch_case(self) -> ASTNode:
-        raise NotImplementedError("Switch case parsing not implemented")
+        """Parse switch-case (WTF?) statement with enhanced support for VAR_ID condition"""
+        self.consume('WTF?')
+        
+        # Support VAR_ID as a direct condition
+        expr = self.parse_expression()
+        
+        cases = []
+        default_case = None
+
+        while self.peek() and self.peek()[0] == 'OMG':
+            self.consume('OMG')
+            case_value = self.parse_expression()  # Use parse_expression instead of consume
+            case_block = self.parse_statement_list(allow_gtfo=True)  # Allow GTFO in case blocks
+            cases.append((case_value, case_block))
+        
+        if self.peek() and self.peek()[0] == 'OMGWTF':
+            self.consume('OMGWTF')
+            default_case = self.parse_statement_list(allow_gtfo=True)
+        
+        self.consume('OIC')
+        
+        children = [expr]
+        children.extend([
+            ASTNode(NodeType.STATEMENT_LIST, children=[case_value, case_block]) 
+            for case_value, case_block in cases
+        ])
+        
+        if default_case:
+            children.append(default_case)
+        
+        return ASTNode(NodeType.SWITCH_CASE, children=children)
     
     def parse_loop(self) -> ASTNode:
-        raise NotImplementedError("Loop parsing not implemented")
+        """Parse loop (IM IN YR) statement"""
+        self.consume('IM_IN_YR')
+        loop_name = self.consume('VAR_ID')[1]
+        
+        # Optional loop condition mode
+        mode = None
+        if self.peek() and self.peek()[0] in {'UPPIN', 'NERFIN'}:
+            mode = self.consume()[0]
+            self.consume('YR')
+            var_token = self.consume('VAR_ID')
+        
+        # Optional condition
+        condition = None
+        if self.peek() and self.peek()[0] == 'WILE':
+            self.consume('WILE')
+            condition = self.parse_expression()
+        
+        # Loop body
+        body = self.parse_statement_list()
+        
+        # Closing loop
+        self.consume('IM_OUTTA_YR')
+        self.consume('VAR_ID')  # Match loop name
+        
+        # Add loop to symbol table
+        self.symbol_table.add_loop(loop_name)
+        
+        return ASTNode(NodeType.LOOP, value=loop_name, children=[
+            ASTNode(NodeType.LITERAL, value=mode) if mode else None,
+            condition,
+            body
+        ])
     
     def parse_function_definition(self) -> ASTNode:
-        raise NotImplementedError("Function definition parsing not implemented")
+        """Parse function definition (HOW IZ I)"""
+        self.consume('HOW_IZ_I')
+        func_name = self.consume('VAR_ID')[1]
+        
+        # Parameters
+        params = []
+        if self.peek() and self.peek()[0] == 'YR':
+            while self.peek() and self.peek()[0] == 'YR':
+                self.consume('YR')
+                param = self.consume('VAR_ID')[1]
+                params.append(param)
+        
+        # Function body
+        body = self.parse_statement_list()
+        
+        # Closing
+        self.consume('IF_U_SAY_SO')
+        
+        # Add to symbol table
+        self.symbol_table.add_function(func_name, params)
+        
+        return ASTNode(NodeType.FUNCTION_DEFINITION, 
+                       value=func_name, 
+                       children=[
+                           ASTNode(NodeType.STATEMENT_LIST, children=[
+                               ASTNode(NodeType.LITERAL, value=param) for param in params
+                           ]),
+                           body
+                       ])
     
     def parse_function_call(self) -> ASTNode:
-        raise NotImplementedError("Function call parsing not implemented")
+        """Parse function call (I IZ)"""
+        self.consume('I_IZ')
+        func_name = self.consume('VAR_ID')[1]
+        
+        # Arguments
+        args = []
+        if self.peek() and self.peek()[0] == 'YR':
+            while self.peek() and self.peek()[0] == 'YR':
+                self.consume('YR')
+                arg = self.parse_expression()
+                args.append(arg)
+        
+        return ASTNode(NodeType.FUNCTION_CALL, 
+                       value=func_name, 
+                       children=args)
     
     def parse_typecasting(self) -> ASTNode:
-        raise NotImplementedError("Typecasting parsing not implemented")
+        """Parse typecasting (MAEK) operation"""
+        self.consume('MAEK')
+        self.consume('A')
+        expr = self.parse_expression()
+        type_token = self.consume()
+        
+        # Validate type
+        valid_types = {'NUMBR', 'NUMBAR', 'YARN', 'TROOF', 'TYPE'}
+        if type_token[0] not in valid_types:
+            raise SyntaxError(f"Invalid type for typecasting: {type_token[0]}")
+        
+        return ASTNode(NodeType.TYPECASTING, value=type_token[1], children=[expr])
+
     
-    def parse_recasting(self) -> ASTNode:
-        raise NotImplementedError("Recasting parsing not implemented")
+    def parse_recasting(self, var_name: str) -> ASTNode:
+        """Parse recasting (IS NOW A) operation""" 
+        self.consume('IS_NOW_A')
+        type_token = self.consume()
+        
+        # Validate type
+        valid_types = {'NUMBR', 'NUMBAR', 'YARN', 'TROOF', 'TYPE'}
+        if type_token[0] not in valid_types:
+            raise SyntaxError(f"Invalid type for recasting: {type_token[0]}")
+        
+        # Update symbol table
+        self.symbol_table.add_variable(var_name, type_token[1])
+        
+        return ASTNode(NodeType.RECASTING, value=type_token[1], children=[
+            ASTNode(NodeType.EXPRESSION, value=var_name)
+        ])
     
     def parse_function_return(self) -> ASTNode:
-        raise NotImplementedError("Function return parsing not implemented")
+        """Parse function return (FOUND YR)"""
+        self.consume('FOUND_YR')
+        return_value = self.parse_expression()
+        
+        return ASTNode(NodeType.FUNCTION_RETURN, children=[return_value])
     
-    def parse_comment(self) -> ASTNode:
-        self.consume('BTW')
-        return ASTNode(NodeType.COMMENT, value=self.consume('MISMATCH')[1])
+    # def parse_comment(self) -> ASTNode:
+    #     self.consume('BTW')
+    #     return ASTNode(NodeType.COMMENT, value=self.consume('MISMATCH')[1])
     
-    def parse_multi_line_comment(self) -> ASTNode:
-        self.consume('OBTW')
-        # Consume until TLDR is found
-        comment_parts = []
-        while self.peek() and self.peek()[0] != 'TLDR':
-            comment_parts.append(self.consume()[1])
-        self.consume('TLDR')
-        return ASTNode(NodeType.COMMENT, value=' '.join(comment_parts))
+    # def parse_multi_line_comment(self) -> ASTNode:
+    #     self.consume('OBTW')
+    #     # Consume until TLDR is found
+    #     comment_parts = []
+    #     while self.peek() and self.peek()[0] != 'TLDR':
+    #         comment_parts.append(self.consume()[1])
+    #     self.consume('TLDR')
+    #     return ASTNode(NodeType.COMMENT, value=' '.join(comment_parts))
 
 class LOLCODEParserGUI:
     def __init__(self, master):
