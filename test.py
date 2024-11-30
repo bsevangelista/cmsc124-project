@@ -111,7 +111,12 @@ class LOLCODESyntaxAnalyzer:
     def parse_program(self) -> ASTNode:
         # self.consume('NEWLINE')
         self.consume('HAI')
-        # self.consume('NEWLINE')
+        # Enforce a newline after HAI
+        if self.peek() and self.peek()[0] == 'NEWLINE':
+            self.consume('NEWLINE')
+        else:
+            raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2]}")
+
         while self.peek() and self.peek()[0] != 'KTHXBYE':
             statement_list = self.parse_statement_list()
         
@@ -123,6 +128,7 @@ class LOLCODESyntaxAnalyzer:
         :param allow_gtfo: Whether to allow GTFO (break) statement """
         statements = []
         while self.peek() and self.peek()[0] not in {'KTHXBYE', 'OIC', 'OMGWTF', 'OMG'}:
+            
             # Check for GTFO if allowed
             if allow_gtfo and self.peek() and self.peek()[0] == 'GTFO':
                 self.consume('GTFO')
@@ -134,8 +140,12 @@ class LOLCODESyntaxAnalyzer:
                 statements.append(statement)
             
             # Automatically skip newlines
-            while self.peek() and self.peek()[0] == 'NEWLINE':
-                self.consume('NEWLINE')
+            # Expect and consume a newline after each statement
+            if self.peek() and self.peek()[0] == 'NEWLINE':
+                self.consume('NEWLINE')  # Enforce the newline rule
+            else:
+                raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2] if self.peek() else 'EOF'}")
+        
         
         return ASTNode(NodeType.STATEMENT_LIST, children=statements)
     
