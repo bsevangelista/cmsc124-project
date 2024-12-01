@@ -6,6 +6,7 @@ from typing import List, Tuple, Optional, Union
 from lexical_analyzer import tokenize_lolcode 
 
 # TODO:
+#     check test case 4 and 5 again
 #     check for valid tokens - correct spellings
 #     check for required token at start of statements (eg, VISIBLE, GIMMEH, WAZZUP) - parse statements
 #     check for expected var_id operands in comparison [test case 6]
@@ -86,6 +87,17 @@ class LOLCODESyntaxAnalyzer:
             return self.tokens[next_index]
         return None
     
+    def peek_next_relevant_token(self):
+        """
+        Peek at the token after the current token without consuming it.
+        """
+        next_index = self.current_token_index + 1
+        while next_index < len(self.tokens):
+            if self.tokens[next_index][0] != 'NEWLINE':
+                return self.tokens[next_index]
+            next_index += 1
+        return None
+    
     def consume(self, expected_type: str = None) -> Tuple[str, str, int]:
         while self.current_token_index < len(self.tokens):
             token = self.tokens[self.current_token_index]
@@ -156,13 +168,18 @@ class LOLCODESyntaxAnalyzer:
         token = self.peek()
         if not token:
             return None
-        if token[0] in {'BOTH_SAEM', 'DIFFRINT'}:  # Check for potential condition
+        if token[0] in {'BOTH_SAEM', 'DIFFRINT'} and (self.peek_next() and self.peek_next()[0] == 'O_RLY'):  # Check for potential condition
             condition = self.parse_comparison()  # Parse the condition first
-            # Expect a NEWLINE after the condition before `O_RLY`
             self.expect_newline()
-            if self.peek() and self.peek()[0] == 'O_RLY':  # Verify O_RLY follows the condition
-                return self.parse_if_statement(condition)  # Pass condition to parse_if_statement
-        
+            return self.parse_if_statement(condition)
+        if token[0] in {'VAR_ID'} and (self.peek_next_relevant_token() and self.peek_next_relevant_token()[0] == 'WTF'):
+            condition = self.parse_expression()
+            self.expect_newline()
+            return self.parse_switch_case(condition)
+        if token[0] == 'GTFO':
+            self.consume('GTFO')
+            return ASTNode(NodeType.STATEMENT_LIST, value='BREAK')
+
         statement_parsers = {
             'VISIBLE': self.parse_print,
             'WAZZUP': self.parse_declaration,
@@ -172,7 +189,7 @@ class LOLCODESyntaxAnalyzer:
             'BOTH_SAEM': self.parse_comparison,
             'DIFFRINT': self.parse_comparison,
             # 'O_RLY': self.parse_if_statement,
-            'WTF?': self.parse_switch_case,
+            # 'WTF': self.parse_switch_case,
             'IM_IN_YR': self.parse_loop,
             'HOW_IZ_I': self.parse_function_definition,
             'I_IZ': self.parse_function_call,
@@ -182,7 +199,7 @@ class LOLCODESyntaxAnalyzer:
             'IS_NOW_A': self.parse_recasting,
             'FOUND_YR': self.parse_function_return,
             'VAR_ID': self.handle_var_id,
-            'GTFO': lambda: ASTNode(NodeType.STATEMENT_LIST, value='BREAK')  # Break statement
+            # 'GTFO': lambda: ASTNode(NodeType.STATEMENT_LIST, value='BREAK')  # Break statement
         }
         
         # Get the parser function for the current token
@@ -516,9 +533,6 @@ class LOLCODESyntaxAnalyzer:
         children = [condition, ASTNode(NodeType.STATEMENT_LIST, children=true_block)]
         if alternative_blocks:
             for cond, block in alternative_blocks:
-                assert isinstance(cond, ASTNode), f"Invalid condition: {cond}"
-                assert all(isinstance(stmt, ASTNode) for stmt in block), f"Invalid block: {block}"
-                
                 alternative_node = ASTNode(NodeType.STATEMENT_LIST, children=[cond, ASTNode(NodeType.STATEMENT_LIST, children=block)])
                 children.append(alternative_node)
         if false_block:
@@ -529,37 +543,56 @@ class LOLCODESyntaxAnalyzer:
 
     
     # Placeholder methods for advanced parsing
-    def parse_switch_case(self) -> ASTNode:
+    def parse_switch_case(self, condition: ASTNode) -> ASTNode:
         """Parse switch-case (WTF?) statement with enhanced support for VAR_ID condition"""
-        self.consume('WTF?')
-        
-        # Support VAR_ID as a direct condition
-        expr = self.parse_expression()
+        self.consume('WTF')
+        self.expect_newline()
+
+        # # Support VAR_ID as a direct condition
+        # expr = self.parse_expression()
         
         cases = []
         default_case = None
 
+        # Parse OMG cases
         while self.peek() and self.peek()[0] == 'OMG':
             self.consume('OMG')
-            case_value = self.parse_expression()  # Use parse_expression instead of consume
-            case_block = self.parse_statement_list(allow_gtfo=True)  # Allow GTFO in case blocks
-            cases.append((case_value, case_block))
-        
+            case_value = self.parse_expression()  # Parse the case value (e.g., literal or variable)
+            self.expect_newline()
+
+            case_block = []
+            while self.peek() and self.peek()[0] not in {'OMG', 'OMGWTF', 'OIC'}:
+                case_block.append(self.parse_statement())
+                self.expect_newline()
+
+            cases.append(ASTNode(NodeType.STATEMENT_LIST, children=[
+                case_value, ASTNode(NodeType.STATEMENT_LIST, children=case_block)
+            ]))
+
+        # Parse OMGWTF default case (optional)
         if self.peek() and self.peek()[0] == 'OMGWTF':
             self.consume('OMGWTF')
-            default_case = self.parse_statement_list(allow_gtfo=True)
-        
-        self.consume('OIC')
-        
-        children = [expr]
-        children.extend([
-            ASTNode(NodeType.STATEMENT_LIST, children=[case_value, case_block]) 
-            for case_value, case_block in cases
-        ])
-        
+            self.expect_newline()
+
+            default_case_block = []
+            while self.peek() and self.peek()[0] != 'OIC':
+                default_case_block.append(self.parse_statement())
+                self.expect_newline()
+
+            default_case = ASTNode(NodeType.STATEMENT_LIST, children=default_case_block)
+
+        # Consume OIC to close the switch-case statement
+        if self.peek() and self.peek()[0] == 'OIC':
+            self.consume('OIC')
+        else:
+            raise SyntaxError("Expected OIC to close the switch-case statement.")
+
+        # Construct the AST node
+        children = [condition]  # Start with the condition as the first child
+        children.extend(cases)  # Add all the parsed cases
         if default_case:
-            children.append(default_case)
-        
+            children.append(default_case)  # Add the default case if it exists
+
         return ASTNode(NodeType.SWITCH_CASE, children=children)
     
     def parse_loop(self) -> ASTNode:
