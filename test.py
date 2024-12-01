@@ -99,14 +99,22 @@ class LOLCODESyntaxAnalyzer:
             return token
         raise SyntaxError("Unexpected end of input")
     
-    def parse_linebreak(self):
-        """Parse <linebreak> ::= \n | \n <linebreak>."""
+    def expect_newline(self):
+        """Ensure that the next token is a NEWLINE and consume it."""
         if self.peek() and self.peek()[0] == 'NEWLINE':
             self.consume('NEWLINE')
-            while self.peek() and self.peek()[0] == 'NEWLINE':
-                self.consume('NEWLINE')  # Consume additional linebreaks
-            return True
-        return False
+        else:
+            raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2] if self.peek() else 'EOF'}")
+
+    
+    # def parse_linebreak(self):
+    #     """Parse <linebreak> ::= \n | \n <linebreak>."""
+    #     if self.peek() and self.peek()[0] == 'NEWLINE':
+    #         self.consume('NEWLINE')
+    #         while self.peek() and self.peek()[0] == 'NEWLINE':
+    #             self.consume('NEWLINE')  # Consume additional linebreaks
+    #         return True
+    #     return False
     
     def parse_program(self) -> ASTNode:
         # self.consume('NEWLINE')
@@ -139,13 +147,8 @@ class LOLCODESyntaxAnalyzer:
             if statement:
                 statements.append(statement)
             
-            # Automatically skip newlines
-            # Expect and consume a newline after each statement
-            if self.peek() and self.peek()[0] == 'NEWLINE':
-                self.consume('NEWLINE')  # Enforce the newline rule
-            else:
-                raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2] if self.peek() else 'EOF'}")
-        
+            while self.peek() and self.peek()[0] == 'NEWLINE':
+                self.expect_newline()
         
         return ASTNode(NodeType.STATEMENT_LIST, children=statements)
     
@@ -153,6 +156,12 @@ class LOLCODESyntaxAnalyzer:
         token = self.peek()
         if not token:
             return None
+        if token[0] in {'BOTH_SAEM', 'DIFFRINT'}:  # Check for potential condition
+            condition = self.parse_comparison()  # Parse the condition first
+            # Expect a NEWLINE after the condition before `O_RLY`
+            self.expect_newline()
+            if self.peek() and self.peek()[0] == 'O_RLY':  # Verify O_RLY follows the condition
+                return self.parse_if_statement(condition)  # Pass condition to parse_if_statement
         
         statement_parsers = {
             'VISIBLE': self.parse_print,
@@ -161,7 +170,8 @@ class LOLCODESyntaxAnalyzer:
             'GIMMEH': self.parse_input,
             'SUM_OF': self.parse_operation,
             'BOTH_SAEM': self.parse_comparison,
-            'O_RLY': self.parse_if_statement,
+            'DIFFRINT': self.parse_comparison,
+            # 'O_RLY': self.parse_if_statement,
             'WTF?': self.parse_switch_case,
             'IM_IN_YR': self.parse_loop,
             'HOW_IZ_I': self.parse_function_definition,
@@ -175,8 +185,13 @@ class LOLCODESyntaxAnalyzer:
             'GTFO': lambda: ASTNode(NodeType.STATEMENT_LIST, value='BREAK')  # Break statement
         }
         
+        # Get the parser function for the current token
         parser = statement_parsers.get(token[0])
-        return parser() if parser else None
+        if parser:
+            return parser()  # Call the parser function
+
+        # Handle unrecognized tokens
+        raise SyntaxError(f"Unexpected token: {token[0]} at line {token[2]}")
     
     def handle_var_id(self):      
         # next_token = self.peek_next()  # Peek at the next token to decide what to do
@@ -206,6 +221,10 @@ class LOLCODESyntaxAnalyzer:
             # Recasting
             return self.parse_recasting(var_token[1])
         
+        # if self.peek() and self.peek()[0] == 'NEWLINE':
+        #     self.consume('NEWLINE')
+        # else:
+        #     raise SyntaxError("FUCKs")
         # If no special handling, treat as simple expression
         return ASTNode(NodeType.EXPRESSION, value=var_token[1])
 
@@ -226,35 +245,62 @@ class LOLCODESyntaxAnalyzer:
                 self.consume('AN')
             elif self.peek() and self.peek()[0] == 'CONCAT':
                 self.consume('CONCAT')
+            elif self.peek() and self.peek()[0] in {
+                                                        'SUM_OF': 'SUM',
+                                                        'DIFF_OF': 'DIFF',
+                                                        'PRODUKT_OF': 'PRODUKT',
+                                                        'QUOSHUNT_OF': 'QUOSHUNT',
+                                                        'MOD_OF': 'MOD',
+                                                        'BIGGR_OF': 'BIGGR',
+                                                        'SMALLR_OF': 'SMALLR',
+                                                        'SMOOSH': 'SMOOSH'
+                                                    }:
+                continue
             else:
                 break
         
         return ASTNode(NodeType.PRINT, children=expressions)
     
     def parse_declaration(self) -> ASTNode:
-        self.consume('WAZZUP')
-        # self.consume('NEWLINE')
+        """Parse variable declarations enclosed in WAZZUP and BUHBYE."""
+        self.consume('WAZZUP')  # Consume the declaration start token
         
         declarations = []
+        
         while self.peek() and self.peek()[0] != 'BUHBYE':
             self.consume('I_HAS_A')
             var_token = self.consume('VAR_ID')
-            
+            # Parse optional initialization with ITZ
             if self.peek() and self.peek()[0] == 'ITZ':
                 self.consume('ITZ')
                 value = self.parse_expression()
+                inferred_type = self.infer_type(value)  # Infer the type from the expression
                 declarations.append(ASTNode(NodeType.DECLARATION, value=var_token[1], children=[value]))
-                self.symbol_table.add_variable(var_token[1], 'NOOB')
+                self.symbol_table.add_variable(var_token[1], inferred_type)
             else:
-                declarations.append(ASTNode(NodeType.DECLARATION, value=var_token[1]))
-                self.symbol_table.add_variable(var_token[1], 'NOOB')
+                declarations.append(ASTNode(NodeType.DECLARATION, value=var_token[1], children=[]))
+                self.symbol_table.add_variable(var_token[1], 'NOOB')  # Default type if no value
             
-            while self.peek() and self.peek()[0] == 'NEWLINE':
-                self.consume('NEWLINE')
+            # Ensure NEWLINE after each declaration
+            self.expect_newline()
         
+        # Consume the end token
         self.consume('BUHBYE')
         
         return ASTNode(NodeType.STATEMENT_LIST, children=declarations)
+    
+    def infer_type(self, value: ASTNode) -> str:
+        """Infer the type of a variable based on its initial value."""
+        if value.node_type == NodeType.LITERAL:
+            if isinstance(value.value, int):
+                return 'NUMBR'
+            elif isinstance(value.value, float):
+                return 'NUMBAR'
+            elif isinstance(value.value, str):
+                return  
+            elif isinstance(value.value, bool):
+                return 'TROOF'
+        return 'NOOB'  # Default type
     
     def parse_assignment(self) -> ASTNode:
         var_token = self.consume('VAR_ID')
@@ -340,9 +386,9 @@ class LOLCODESyntaxAnalyzer:
         }
         
         if token[0] == 'VAR_ID':
-            return ASTNode(NodeType.EXPRESSION, value=self.consume('VAR_ID')[1])
+            return ASTNode(NodeType.EXPRESSION, value=self.consume(token[0])[1])
         elif token[0] in {'NUMBR', 'NUMBAR', 'YARN', 'TROOF'}:
-            return ASTNode(NodeType.LITERAL, value=self.consume()[1])
+            return ASTNode(NodeType.LITERAL, value=self.consume(token[0])[1])
         elif token[0] in boolean_ops:
             return self.parse_boolean_expr()
         elif token[0] in {'SUM_OF', 'DIFF_OF', 'PRODUKT_OF', 'QUOSHUNT_OF', 'MOD_OF', 'BIGGR_OF', 'SMALLR_OF', 'SMOOSH'}:
@@ -423,38 +469,64 @@ class LOLCODESyntaxAnalyzer:
         # Fallback to regular expression parsing
         return self.parse_expression()
     
-    def parse_if_statement(self) -> ASTNode:
-        condition = self.parse_expression()
-        self.consume('O_RLY')
-        # self.consume('NEWLINE')
-        
+    def parse_if_statement(self, condition: ASTNode) -> ASTNode:
+        """Parse an if-then statement, starting after the condition."""
+        self.consume('O_RLY')  # Consume O_RLY
+        self.expect_newline()
+
+        # Parse YA_RLY and the true block
         self.consume('YA_RLY')
-        # self.consume('NEWLINE')
-        true_block = self.parse_statement_list()
+        self.expect_newline()
+        true_block = []
+        while self.peek() and self.peek()[0] not in {'MEBBE', 'NO_WAI', 'OIC'}:
+            data = self.parse_statement()
+            print(data)
+            true_block.append(data)
+            self.expect_newline()
         
+        # Parse MEBBE blocks (optional)
         alternative_blocks = []
         while self.peek() and self.peek()[0] == 'MEBBE':
             self.consume('MEBBE')
             alt_condition = self.parse_expression()
-            # self.consume('NEWLINE')
-            alt_block = self.parse_statement_list()
+            alt_block = []  # Initialize alt_block inside the loop
+            self.expect_newline()
+            while self.peek() and self.peek()[0] not in {'MEBBE', 'NO_WAI', 'OIC'}:
+                alt_block.append(self.parse_statement())
+                self.expect_newline()
             alternative_blocks.append((alt_condition, alt_block))
-        
-        false_block = None
+
+        # Parse NO_WAI block (optional)
+        false_block = []
         if self.peek() and self.peek()[0] == 'NO_WAI':
             self.consume('NO_WAI')
-            # self.consume('NEWLINE')
-            false_block = self.parse_statement_list()
-        
-        self.consume('OIC')
-        
-        children = [condition, true_block]
+            self.expect_newline()
+            while self.peek() and self.peek()[0] != 'OIC':
+                false_block.append(self.parse_statement())
+                self.expect_newline()
+
+        # Consume OIC to close the if-then statement
+        if self.peek() and self.peek()[0] == 'OIC':
+            self.consume('OIC')
+            self.expect_newline()
+        else:
+            raise SyntaxError("Expected OIC to close the if-then statement")
+
+        # Construct AST node
+        children = [condition, ASTNode(NodeType.STATEMENT_LIST, children=true_block)]
         if alternative_blocks:
-            children.extend([ASTNode(NodeType.STATEMENT_LIST, children=[cond, block]) for cond, block in alternative_blocks])
+            for cond, block in alternative_blocks:
+                assert isinstance(cond, ASTNode), f"Invalid condition: {cond}"
+                assert all(isinstance(stmt, ASTNode) for stmt in block), f"Invalid block: {block}"
+                
+                alternative_node = ASTNode(NodeType.STATEMENT_LIST, children=[cond, ASTNode(NodeType.STATEMENT_LIST, children=block)])
+                children.append(alternative_node)
         if false_block:
-            children.append(false_block)
-        
+            children.append(ASTNode(NodeType.STATEMENT_LIST, children=false_block))
+
         return ASTNode(NodeType.IF_STATEMENT, children=children)
+
+
     
     # Placeholder methods for advanced parsing
     def parse_switch_case(self) -> ASTNode:
