@@ -37,9 +37,10 @@ class NodeType(Enum):
     COMMENT = auto()
 
 class ASTNode:
-    def __init__(self, node_type: NodeType, value: Optional[str] = None, children: Optional[List['ASTNode']] = None):
+    def __init__(self, node_type: NodeType, value: Optional[str] = None, token_type=None, children: Optional[List['ASTNode']] = None):
         self.node_type = node_type
         self.value = value
+        self.token_type = token_type  # Token type (e.g., 'NUMBR', 'TROOF')
         self.children = children or []
         
     def __repr__(self, level=0):
@@ -310,18 +311,42 @@ class LOLCODESyntaxAnalyzer:
         
         return ASTNode(NodeType.STATEMENT_LIST, children=declarations)
     
-    def infer_type(self, value: ASTNode) -> str:
+    def infer_type(self, value: ASTNode):
         """Infer the type of a variable based on its initial value."""
+        print(f"Inferring type for node: {value}")
+        print(f"Node type: {value.node_type}")
+        print(f"Node value: {value.value}")
+        print(f"Value type: {type(value.value)}")
+
+        """
+        Infer the type of a variable based on its token type in the AST node.
+
+        Args:
+            value (ASTNode): The AST node containing the value or literal.
+
+        Returns:
+            str: The inferred type ('NUMBR', 'NUMBAR', 'YARN', 'TROOF', or 'NOOB').
+        """
+        print(f"Inferring type for node: {value}")
+
         if value.node_type == NodeType.LITERAL:
-            if isinstance(value.value, int):
+            token_type = value.token_type  # Access the token type directly
+            if token_type == 'NUMBR':
                 return 'NUMBR'
-            elif isinstance(value.value, float):
+            elif token_type == 'NUMBAR':
                 return 'NUMBAR'
-            elif isinstance(value.value, str):
+            elif token_type == 'YARN':
                 return 'YARN'
-            elif isinstance(value.value, bool):
+            elif token_type == 'TROOF':
                 return 'TROOF'
-        return 'NOOB'  # Default type
+            else:
+                return 'NOOB'  # Default for undefined or invalid token types
+        elif value.node_type == NodeType.EXPRESSION:
+            # Handle cases where the type is inferred from expressions or operations
+            return self.symbol_table.get(value.value, {}).get("type", "NOOB")
+        
+        # Default for nodes without a clear type
+        return 'NOOB'
     
     def parse_assignment(self) -> ASTNode:
         var_token = self.consume('VAR_ID')
@@ -407,9 +432,11 @@ class LOLCODESyntaxAnalyzer:
         }
         
         if token[0] == 'VAR_ID':
-            return ASTNode(NodeType.EXPRESSION, value=self.consume(token[0])[1])
+            consumed_token = self.consume(token[0])
+            return ASTNode(NodeType.EXPRESSION,  value=consumed_token[1], token_type=consumed_token[0])
         elif token[0] in {'NUMBR', 'NUMBAR', 'YARN', 'TROOF'}:
-            return ASTNode(NodeType.LITERAL, value=self.consume(token[0])[1])
+            consumed_token = self.consume(token[0])
+            return ASTNode(NodeType.LITERAL, value=consumed_token[1], token_type=consumed_token[0])
         elif token[0] in boolean_ops:
             return self.parse_boolean_expr()
         elif token[0] in {'SUM_OF', 'DIFF_OF', 'PRODUKT_OF', 'QUOSHUNT_OF', 'MOD_OF', 'BIGGR_OF', 'SMALLR_OF', 'SMOOSH'}:
