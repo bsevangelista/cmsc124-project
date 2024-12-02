@@ -113,11 +113,13 @@ class LOLCODESyntaxAnalyzer:
     
     def expect_newline(self):
         """Ensure that the next token is a NEWLINE and consume it."""
-        while self.peek() and self.peek()[0] == 'NEWLINE':
-            if self.peek() and self.peek()[0] == 'NEWLINE':
-                self.consume('NEWLINE')
-            else:
-                raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2] if self.peek() else 'EOF'}")
+        token = self.peek()
+        if token and token[0] == 'NEWLINE':
+            self.consume('NEWLINE')  # Consume at least one NEWLINE
+            while self.peek() and self.peek()[0] == 'NEWLINE':
+                self.consume('NEWLINE')  # Skip remaining NEWLINEs
+        else:
+            raise SyntaxError(f"Expected NEWLINE, found {token[0] if token else 'EOF'} at line {token[2] if token else 'EOF'}")
 
     
     # def parse_linebreak(self):
@@ -525,7 +527,7 @@ class LOLCODESyntaxAnalyzer:
         # Consume OIC to close the if-then statement
         if self.peek() and self.peek()[0] == 'OIC':
             self.consume('OIC')
-            self.expect_newline()
+            # self.consume('NEWLINE')
         else:
             raise SyntaxError("Expected OIC to close the if-then statement")
 
