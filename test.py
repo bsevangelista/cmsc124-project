@@ -113,10 +113,11 @@ class LOLCODESyntaxAnalyzer:
     
     def expect_newline(self):
         """Ensure that the next token is a NEWLINE and consume it."""
-        if self.peek() and self.peek()[0] == 'NEWLINE':
-            self.consume('NEWLINE')
-        else:
-            raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2] if self.peek() else 'EOF'}")
+        while self.peek() and self.peek()[0] == 'NEWLINE':
+            if self.peek() and self.peek()[0] == 'NEWLINE':
+                self.consume('NEWLINE')
+            else:
+                raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2] if self.peek() else 'EOF'}")
 
     
     # def parse_linebreak(self):
@@ -159,19 +160,21 @@ class LOLCODESyntaxAnalyzer:
             if statement:
                 statements.append(statement)
             
-            while self.peek() and self.peek()[0] == 'NEWLINE':
-                self.expect_newline()
+            # while self.peek() and self.peek()[0] == 'NEWLINE':
+            self.expect_newline()
         
         return ASTNode(NodeType.STATEMENT_LIST, children=statements)
     
     def parse_statement(self) -> Optional[ASTNode]:
         token = self.peek()
+        print(token)
         if not token:
             return None
-        if token[0] in {'BOTH_SAEM', 'DIFFRINT'} and (self.peek_next() and self.peek_next()[0] == 'O_RLY'):  # Check for potential condition
+        if token[0] in {'BOTH_SAEM', 'DIFFRINT'}:  # Check for potential condition
             condition = self.parse_comparison()  # Parse the condition first
             self.expect_newline()
-            return self.parse_if_statement(condition)
+            if self.peek() and self.peek()[0] == 'O_RLY':
+                return self.parse_if_statement(condition)
         if token[0] in {'VAR_ID'} and (self.peek_next_relevant_token() and self.peek_next_relevant_token()[0] == 'WTF'):
             condition = self.parse_expression()
             self.expect_newline()
@@ -208,7 +211,7 @@ class LOLCODESyntaxAnalyzer:
             return parser()  # Call the parser function
 
         # Handle unrecognized tokens
-        raise SyntaxError(f"Unexpected token: {token[0]} at line {token[2]}")
+        raise SyntaxError(f"Unexpected token here: {token[0]} at line {token[2]}")
     
     def handle_var_id(self):      
         # next_token = self.peek_next()  # Peek at the next token to decide what to do
@@ -496,9 +499,7 @@ class LOLCODESyntaxAnalyzer:
         self.expect_newline()
         true_block = []
         while self.peek() and self.peek()[0] not in {'MEBBE', 'NO_WAI', 'OIC'}:
-            data = self.parse_statement()
-            print(data)
-            true_block.append(data)
+            true_block.append(self.parse_statement())
             self.expect_newline()
         
         # Parse MEBBE blocks (optional)
