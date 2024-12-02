@@ -20,19 +20,16 @@ def tokenize_lolcode(source_code):
         if kind == 'WHITESPACE' or kind == 'NEWLINE':
             if kind == 'NEWLINE':
                 line_number += 1  # Track line numbers
-                tokens.append((kind, '\n', line_number))
+                tokens.append((kind, '\\n', line_number))
             continue  # Skip whitespace and newlines
         elif kind in {'SINGLE_LINE_COMMENT', 'MULTI_LINE_COMMENT'}:
             # Extract and process the comment text
             if kind == 'SINGLE_LINE_COMMENT':
                 comment_text = value[4:]  # Skip "BTW"
-                # tokens.append((kind, comment_text.strip(), line_number))
             elif kind == 'MULTI_LINE_COMMENT':
                 comment_text = value[4:-4]  # Skip "OBTW" and "TLDR"
                 # Count the number of newline characters in the multi-line comment
                 num_newlines = comment_text.count('\n')
-                # Add the multi-line comment as a token and update line number
-                # tokens.append((kind, comment_text.strip(), line_number))
                 line_number += num_newlines  # Increment line_number by the number of newlines
         elif kind == 'MISMATCH':
             print(f"Unexpected character {value} at line {line_number}")
