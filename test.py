@@ -167,7 +167,6 @@ class LOLCODESyntaxAnalyzer:
     
     def parse_statement(self) -> Optional[ASTNode]:
         token = self.peek()
-        print(token)
         if not token:
             return None
         if token[0] in {'BOTH_SAEM', 'DIFFRINT'}:  # Check for potential condition
