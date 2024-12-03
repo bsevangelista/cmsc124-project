@@ -54,12 +54,20 @@ class ASTNode:
 
 class SymbolTable:
     def __init__(self):
-        self.variables = {}
+        self.variables = {"IT":{"type": 'NOOB', "value": ''}}
         self.functions = {}
         self.loops = {}
     
-    def add_variable(self, name: str, type: str):
-        self.variables[name] = type
+    def add_variable(self, name, type: str, value: any):
+        self.variables[name] = {"type": type, "value": value}
+
+    def get_variables(self):
+        """Return all variables as a dictionary."""
+        return self.variables
+    
+    def __iter__(self):
+        """Make the class iterable over its variables."""
+        return iter(self.variables.items())
     
     def add_function(self, name: str, params: List[str]):
         self.functions[name] = params
@@ -296,12 +304,12 @@ class LOLCODESyntaxAnalyzer:
             if self.peek() and self.peek()[0] == 'ITZ':
                 self.consume('ITZ')
                 value = self.parse_expression()
-                inferred_type = self.infer_type(value)  # Infer the type from the expression
+                inferred_type, inferred_value = self.infer_type_value(value)  # Infer the type from the expression
                 declarations.append(ASTNode(NodeType.DECLARATION, value=var_token[1], children=[value]))
-                self.symbol_table.add_variable(var_token[1], inferred_type)
+                self.symbol_table.add_variable(var_token[1], inferred_type, inferred_value)
             else:
                 declarations.append(ASTNode(NodeType.DECLARATION, value=var_token[1], children=[]))
-                self.symbol_table.add_variable(var_token[1], 'NOOB')  # Default type if no value
+                self.symbol_table.add_variable(var_token[1], 'NOOB', '')  # Default type if no value
             
             # Ensure NEWLINE after each declaration
             self.expect_newline()
@@ -311,12 +319,7 @@ class LOLCODESyntaxAnalyzer:
         
         return ASTNode(NodeType.STATEMENT_LIST, children=declarations)
     
-    def infer_type(self, value: ASTNode):
-        """Infer the type of a variable based on its initial value."""
-        print(f"Inferring type for node: {value}")
-        print(f"Node type: {value.node_type}")
-        print(f"Node value: {value.value}")
-        print(f"Value type: {type(value.value)}")
+    def infer_type_value(self, value: ASTNode):
 
         """
         Infer the type of a variable based on its token type in the AST node.
@@ -327,26 +330,26 @@ class LOLCODESyntaxAnalyzer:
         Returns:
             str: The inferred type ('NUMBR', 'NUMBAR', 'YARN', 'TROOF', or 'NOOB').
         """
-        print(f"Inferring type for node: {value}")
 
         if value.node_type == NodeType.LITERAL:
             token_type = value.token_type  # Access the token type directly
             if token_type == 'NUMBR':
-                return 'NUMBR'
+                return 'NUMBR', int(value.value)
             elif token_type == 'NUMBAR':
-                return 'NUMBAR'
+                return 'NUMBAR', float(value.value)
             elif token_type == 'YARN':
-                return 'YARN'
+                return 'YARN', str(value.value)
             elif token_type == 'TROOF':
-                return 'TROOF'
+                return 'TROOF', str(value.value)
             else:
-                return 'NOOB'  # Default for undefined or invalid token types
+                return 'NOOB', ''  # Default for undefined or invalid token types
         elif value.node_type == NodeType.EXPRESSION:
             # Handle cases where the type is inferred from expressions or operations
-            return self.symbol_table.get(value.value, {}).get("type", "NOOB")
+            var_info = self.symbol_table.variables.get(value.value, {})
+            return var_info.get("type", "NOOB"), var_info.get("value", None)
         
         # Default for nodes without a clear type
-        return 'NOOB'
+        return 'NOOB', ''
     
     def parse_assignment(self) -> ASTNode:
         var_token = self.consume('VAR_ID')
@@ -758,114 +761,114 @@ class LOLCODESyntaxAnalyzer:
     #     self.consume('TLDR')
     #     return ASTNode(NodeType.COMMENT, value=' '.join(comment_parts))
 
-# class LOLCODEParserGUI:
-#     def __init__(self, master):
-#         self.master = master
-#         master.title("LOLCODE Parser")
-#         master.geometry("600x500")
+class LOLCODEParserGUI:
+    def __init__(self, master):
+        self.master = master
+        master.title("LOLCODE Parser")
+        master.geometry("600x500")
 
-#         # File selection frame
-#         self.file_frame = tk.Frame(master)
-#         self.file_frame.pack(pady=10, padx=10, fill=tk.X)
+        # File selection frame
+        self.file_frame = tk.Frame(master)
+        self.file_frame.pack(pady=10, padx=10, fill=tk.X)
 
-#         self.file_label = tk.Label(self.file_frame, text="Selected File:")
-#         self.file_label.pack(side=tk.LEFT)
+        self.file_label = tk.Label(self.file_frame, text="Selected File:")
+        self.file_label.pack(side=tk.LEFT)
 
-#         self.file_path = tk.StringVar()
-#         self.file_entry = tk.Entry(self.file_frame, textvariable=self.file_path, width=40)
-#         self.file_entry.pack(side=tk.LEFT, padx=5)
+        self.file_path = tk.StringVar()
+        self.file_entry = tk.Entry(self.file_frame, textvariable=self.file_path, width=40)
+        self.file_entry.pack(side=tk.LEFT, padx=5)
 
-#         self.browse_button = tk.Button(self.file_frame, text="Browse", command=self.browse_file)
-#         self.browse_button.pack(side=tk.LEFT)
+        self.browse_button = tk.Button(self.file_frame, text="Browse", command=self.browse_file)
+        self.browse_button.pack(side=tk.LEFT)
 
-#         # Notebook for different views
-#         self.notebook = ttk.Notebook(master)
-#         self.notebook.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
+        # Notebook for different views
+        self.notebook = ttk.Notebook(master)
+        self.notebook.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
 
-#         # Tokens view
-#         self.tokens_frame = tk.Frame(self.notebook)
-#         self.tokens_text = tk.Text(self.tokens_frame, wrap=tk.WORD, height=20)
-#         self.tokens_text.pack(expand=True, fill=tk.BOTH)
-#         self.notebook.add(self.tokens_frame, text="Tokens")
+        # Tokens view
+        self.tokens_frame = tk.Frame(self.notebook)
+        self.tokens_text = tk.Text(self.tokens_frame, wrap=tk.WORD, height=20)
+        self.tokens_text.pack(expand=True, fill=tk.BOTH)
+        self.notebook.add(self.tokens_frame, text="Tokens")
 
-#         # AST view
-#         self.ast_frame = tk.Frame(self.notebook)
-#         self.ast_text = tk.Text(self.ast_frame, wrap=tk.WORD, height=20)
-#         self.ast_text.pack(expand=True, fill=tk.BOTH)
-#         self.notebook.add(self.ast_frame, text="Abstract Syntax Tree")
+        # AST view
+        self.ast_frame = tk.Frame(self.notebook)
+        self.ast_text = tk.Text(self.ast_frame, wrap=tk.WORD, height=20)
+        self.ast_text.pack(expand=True, fill=tk.BOTH)
+        self.notebook.add(self.ast_frame, text="Abstract Syntax Tree")
 
-#         # Symbol Table view
-#         self.symbol_frame = tk.Frame(self.notebook)
-#         self.symbol_text = tk.Text(self.symbol_frame, wrap=tk.WORD, height=20)
-#         self.symbol_text.pack(expand=True, fill=tk.BOTH)
-#         self.notebook.add(self.symbol_frame, text="Symbol Tables")
+        # Symbol Table view
+        self.symbol_frame = tk.Frame(self.notebook)
+        self.symbol_text = tk.Text(self.symbol_frame, wrap=tk.WORD, height=20)
+        self.symbol_text.pack(expand=True, fill=tk.BOTH)
+        self.notebook.add(self.symbol_frame, text="Symbol Tables")
 
-#         # Parse button
-#         self.parse_button = tk.Button(master, text="Parse LOLCODE", command=self.parse_lolcode)
-#         self.parse_button.pack(pady=10)
+        # Parse button
+        self.parse_button = tk.Button(master, text="Parse LOLCODE", command=self.parse_lolcode)
+        self.parse_button.pack(pady=10)
 
-#     def browse_file(self):
-#         filename = filedialog.askopenfilename(
-#             title="Select LOLCODE File", 
-#             filetypes=[("LOLCODE Files", "*.lol")]
-#         )
-#         if filename:
-#             self.file_path.set(filename)
+    def browse_file(self):
+        filename = filedialog.askopenfilename(
+            title="Select LOLCODE File", 
+            filetypes=[("LOLCODE Files", "*.lol")]
+        )
+        if filename:
+            self.file_path.set(filename)
 
-#     def parse_lolcode(self):
-#         # Clear previous results
-#         for text_widget in [self.tokens_text, self.ast_text, self.symbol_text]:
-#             text_widget.delete('1.0', tk.END)
+    def parse_lolcode(self):
+        # Clear previous results
+        for text_widget in [self.tokens_text, self.ast_text, self.symbol_text]:
+            text_widget.delete('1.0', tk.END)
 
-#         # Get the file path
-#         file_path = self.file_path.get()
-#         if not file_path:
-#             messagebox.showerror("Error", "Please select a LOLCODE file")
-#             return
+        # Get the file path
+        file_path = self.file_path.get()
+        if not file_path:
+            messagebox.showerror("Error", "Please select a LOLCODE file")
+            return
 
-#         try:
-#             # Read the file
-#             with open(file_path, 'r') as file:
-#                 source_code = file.read()
+        try:
+            # Read the file
+            with open(file_path, 'r') as file:
+                source_code = file.read()
 
-#             # Tokenize
-#             tokens = tokenize_lolcode(source_code)
+            # Tokenize
+            tokens = tokenize_lolcode(source_code)
             
-#             # Display tokens
-#             self.tokens_text.insert(tk.END, "TOKENS:\n")
-#             for token in tokens:
-#                 self.tokens_text.insert(tk.END, f"{token}\n")
+            # Display tokens
+            self.tokens_text.insert(tk.END, "TOKENS:\n")
+            for token in tokens:
+                self.tokens_text.insert(tk.END, f"{token}\n")
 
-#             # Parse
-#             analyzer = LOLCODESyntaxAnalyzer(tokens)
-#             ast = analyzer.parse_program()
+            # Parse
+            analyzer = LOLCODESyntaxAnalyzer(tokens)
+            ast = analyzer.parse_program()
 
-#             # Display AST
-#             self.ast_text.insert(tk.END, "ABSTRACT SYNTAX TREE:\n")
-#             self.ast_text.insert(tk.END, str(ast))
+            # Display AST
+            self.ast_text.insert(tk.END, "ABSTRACT SYNTAX TREE:\n")
+            self.ast_text.insert(tk.END, str(ast))
 
-#             # Display Symbol Tables
-#             self.symbol_text.insert(tk.END, "SYMBOL TABLES:\n")
-#             self.symbol_text.insert(tk.END, "Variables:\n")
-#             for var, type in analyzer.symbol_table.variables.items():
-#                 self.symbol_text.insert(tk.END, f"{var}: {type}\n")
+            # Display Symbol Tables
+            self.symbol_text.insert(tk.END, "SYMBOL TABLES:\n")
+            self.symbol_text.insert(tk.END, "Variables:\n")
+            for var, type in analyzer.symbol_table.variables.items():
+                self.symbol_text.insert(tk.END, f"{var}: {type}\n")
             
-#             self.symbol_text.insert(tk.END, "\nFunctions:\n")
-#             for func, params in analyzer.symbol_table.functions.items():
-#                 self.symbol_text.insert(tk.END, f"{func}: {params}\n")
+            self.symbol_text.insert(tk.END, "\nFunctions:\n")
+            for func, params in analyzer.symbol_table.functions.items():
+                self.symbol_text.insert(tk.END, f"{func}: {params}\n")
             
-#             self.symbol_text.insert(tk.END, "\nLoops:\n")
-#             for loop in analyzer.symbol_table.loops:
-#                 self.symbol_text.insert(tk.END, f"{loop}\n")
+            self.symbol_text.insert(tk.END, "\nLoops:\n")
+            for loop in analyzer.symbol_table.loops:
+                self.symbol_text.insert(tk.END, f"{loop}\n")
 
-#             print('program parsed successfully!')
-#         except Exception as e:
-#             messagebox.showerror("Parsing Error", str(e))
+            print('program parsed successfully!')
+        except Exception as e:
+            messagebox.showerror("Parsing Error", str(e))
 
-# def main():
-#     root = tk.Tk()
-#     LOLCODEParserGUI(root)
-#     root.mainloop()
+def main():
+    root = tk.Tk()
+    LOLCODEParserGUI(root)
+    root.mainloop()
 
-# if __name__ == "__main__":
-#     main()
+if __name__ == "__main__":
+    main()

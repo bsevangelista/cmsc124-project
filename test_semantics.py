@@ -1,361 +1,389 @@
-import re
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from enum import Enum, auto
-from typing import List, Tuple, Optional, Union, Dict, Any
-import ast
+import re
+import sys
+from io import StringIO
 
-# Import the existing lexical analyzer and syntax analyzer
-from lexical_analyzer import tokenize_lolcode
+# Import the existing syntax analyzer components
 from test import LOLCODESyntaxAnalyzer, NodeType, ASTNode, SymbolTable
+from lexical_analyzer import tokenize_lolcode
 
-class SemanticError(Exception):
-    """Custom exception for semantic analysis errors."""
-    pass
+class ASTInterpreter:
+    def __init__(self, ast: ASTNode, symbol_table: SymbolTable):
+        self.ast = ast
+        self.symbol_table = symbol_table
+
+    def evaluate_node(self, node: ASTNode):
+        """Recursively evaluate an AST node."""
+        if node.node_type == NodeType.LITERAL:
+            return node.value
+        elif node.node_type == NodeType.EXPRESSION:
+            if node.children:
+                return self.evaluate_node(node.children[0])  # Evaluate the child node
+            else:
+                return node.value
+        elif node.node_type == NodeType.OPERATION:
+            if len(node.children) < 2:
+                raise IndexError(f"Operation node '{node.value}' requires at least 2 operands.")
+            
+            if node.value == "SUM":
+                return sum(self.evaluate_node(child) for child in node.children)
+            elif node.value == "DIFF":
+                return self.evaluate_node(node.children[0]) - self.evaluate_node(node.children[1])
+            elif node.value == "PRODUKT":
+                result = 1
+                for child in node.children:
+                    print(child, 'here')
+                    value = self.evaluate_node(child)
+                    if isinstance(value, (int, float)):  # Ensure it's numeric
+                        result *= value
+                    else:
+                        raise TypeError(f"Cannot multiply non-numeric type: {type(value)}")
+                return result
+            elif node.value == "QUOSHUNT":
+                if len(node.children) < 2:
+                    raise IndexError(f"QUOSHUNT operation requires 2 operands.")
+                return self.evaluate_node(node.children[0]) // self.evaluate_node(node.children[1])
+            elif node.value == "BIGGR":
+                return max(self.evaluate_node(child) for child in node.children)
+            elif node.value == "SMALLR":
+                return min(self.evaluate_node(child) for child in node.children)
+        elif node.node_type == NodeType.VARIABLE:
+            var_details = self.symbol_table.variables.get(node.value)
+            if var_details:
+                return var_details['value']
+            else:
+                raise ValueError(f"Variable '{node.value}' not defined.")
+        else:
+            raise ValueError(f"Unknown node type: {node.node_type}")
+
+
+    def interpret(self, node: ASTNode):
+        """Interpret the AST, focusing on program logic."""
+        if node.node_type in [NodeType.PROGRAM, NodeType.STATEMENT_LIST]:
+            for child in node.children:
+                self.interpret(child)
+        elif node.node_type == NodeType.PRINT:
+            value = self.evaluate_node(node.children[0])
+            print(value)
+        elif node.node_type == NodeType.ASSIGNMENT:
+            var_name = node.value
+            value = self.evaluate_node(node.children[0])
+            self.symbol_table.add_variable(var_name, "DYNAMIC", value)
+        else:
+            print(f"Unhandled node type: {node.node_type}")
+
+
 
 class SemanticAnalyzer:
-    def __init__(self, ast_root: ASTNode, symbol_table: SymbolTable):
-        """
-        Initialize the semantic analyzer with the AST and symbol table.
-        
-        :param ast_root: Root node of the Abstract Syntax Tree
-        :param symbol_table: Symbol table from syntax analysis
-        """
-        self.ast_root = ast_root
+    def __init__(self, ast: ASTNode, symbol_table: SymbolTable):
+        self.ast = ast
         self.symbol_table = symbol_table
-        self.errors: List[str] = []
+        self.errors = []
         
     def analyze(self):
-        """
-        Perform comprehensive semantic analysis on the AST.
-        """
-        self.errors = []  # Reset errors
-        self._analyze_node(self.ast_root)
+        """Perform semantic analysis on the AST"""
+        self.traverse_ast(self.ast)
         return len(self.errors) == 0
     
-    def _analyze_node(self, node: ASTNode):
-        """
-        Recursively analyze each node in the AST for semantic correctness.
-        
-        :param node: Current AST node to analyze
-        """
+    def traverse_ast(self, node: ASTNode):
+        """Recursively traverse the AST and perform semantic checks"""
         if not node:
             return
         
-        # Dispatch to specific analysis methods based on node type
-        analysis_methods = {
-            NodeType.ASSIGNMENT: self._analyze_assignment,
-            NodeType.DECLARATION: self._analyze_declaration,
-            NodeType.OPERATION: self._analyze_operation,
-            NodeType.COMPARISON: self._analyze_comparison,
-            NodeType.BOOLEAN_OPERATION: self._analyze_boolean_operation,
-            NodeType.FUNCTION_CALL: self._analyze_function_call,
-            NodeType.FUNCTION_DEFINITION: self._analyze_function_definition,
-            NodeType.FUNCTION_RETURN: self._analyze_function_return,
-            NodeType.TYPECASTING: self._analyze_typecasting,
-            NodeType.RECASTING: self._analyze_recasting,
-            NodeType.IF_STATEMENT: self._analyze_if_statement,
-            NodeType.SWITCH_CASE: self._analyze_switch_case,
-            NodeType.LOOP: self._analyze_loop
-        }
+        # Type checking and semantic rules for different node types
+        if node.node_type == NodeType.ASSIGNMENT:
+            self.check_assignment(node)
+        # elif node.node_type == NodeType.DECLARATION:
+        #     self.check_declaration(node)
+        elif node.node_type == NodeType.OPERATION:
+            self.check_operation(node)
+        elif node.node_type == NodeType.COMPARISON:
+            self.check_comparison(node)
+        elif node.node_type == NodeType.FUNCTION_CALL:
+            self.check_function_call(node)
         
-        # Call specific analysis method if exists
-        if node.node_type in analysis_methods:
-            analysis_methods[node.node_type](node)
-        
-        # Recursively analyze children
+        # Recursively check children
         for child in node.children:
             if isinstance(child, ASTNode):
-                self._analyze_node(child)
+                self.traverse_ast(child)
+
+    def check_declaration(self, node: ASTNode):
+        var_name = node.value
+        if var_name in self.symbol_table:
+            self.errors.append(f"Variable '{var_name}' already declared.")
+        else:
+            # Default type and value
+            var_type = 'NOOB'
+            var_value = None
+
+            # If initialized, evaluate the initializer
+            if node.children:
+                var_type, var_value = self.evaluate_expression(node.children[0])
+
+            # Add to the symbol table
+            self.symbol_table[var_name] = {'type': var_type, 'value': var_value}
+
+    def evaluate_expression(self, node: ASTNode):
+        if node.node_type == NodeType.LITERAL:
+            return node.token_type, node.value  # Type and value of the literal
+        elif node.node_type == NodeType.OPERATION:
+            return self.evaluate_operation(node)
+        elif node.node_type == NodeType.EXPRESSION:
+            var_name = node.value
+            if var_name in self.symbol_table:
+                return self.symbol_table[var_name]['type'], self.symbol_table[var_name]['value']
+            else:
+                return(f"Variable '{var_name}' not declared.")
+        # Add more cases as needed...
+
+    def evaluate_operation(self, node: ASTNode):
+        operation = node.value
+        left_type, left_value = self.evaluate_expression(node.children[0])
+        right_type, right_value = self.evaluate_expression(node.children[1])
+        if left_type not in {'NUMBR', 'NUMBAR'} or right_type not in {'NUMBR', 'NUMBAR'}:
+            return(f"Invalid operand types for operation '{operation}'.")
+
+        result_type = 'NUMBAR' if 'NUMBAR' in (left_type, right_type) else 'NUMBR'
+        result_value = self.perform_operation(operation, left_value, right_value)
+        return result_type, result_value
     
-    def _analyze_assignment(self, node: ASTNode):
+    def perform_operation(self, operation: str, left_value, right_value):
         """
-        Analyze variable assignment for type consistency and variable existence.
-        
-        :param node: Assignment node to analyze
+        Perform an arithmetic operation and return the result.
         """
+        if operation == 'SUM_OF':
+            return left_value + right_value
+        elif operation == 'DIFF_OF':
+            return left_value - right_value
+        elif operation == 'PRODUKT_OF':
+            return left_value * right_value
+        elif operation == 'QUOSHUNT_OF':
+            if right_value == 0:
+                print("Division by zero.")
+            return left_value / right_value
+        elif operation == 'MOD_OF':
+            if right_value == 0:
+                print("Division by zero.")
+            return left_value % right_value
+        elif operation == 'BIGGR_OF':
+            return max(left_value, right_value)
+        elif operation == 'SMALLR_OF':
+            return min(left_value, right_value)
+        else:
+            print(f"Unknown operation: {operation}")
+    
+    def check_assignment(self, node: ASTNode):
+        """Check semantic rules for variable assignment"""
         var_name = node.value
         
-        # Check if variable is declared
+        # Check if variable exists in symbol table
         if var_name not in self.symbol_table.variables:
-            self.errors.append(f"Semantic Error: Variable '{var_name}' used before declaration")
+            self.errors.append(f"Variable '{var_name}' used before declaration")
         
-        # Type checking would typically happen here
-        # In a more advanced implementation, you'd verify type compatibility
+        # Type compatibility check (basic)
+        if len(node.children) > 0:
+            value_type = self.infer_type(node.children[0])
+            current_type = self.symbol_table.variables.get(var_name, 'NOOB')
+            
+            if current_type == 'NOOB':
+                # Update type if not previously defined
+                self.symbol_table.variables[var_name] = value_type
     
-    def _analyze_declaration(self, node: ASTNode):
-        """
-        Analyze variable declaration.
-        
-        :param node: Declaration node to analyze
-        """
-        var_name = node.value
-        
-        # Check for duplicate declarations
-        if var_name in self.symbol_table.variables:
-            self.errors.append(f"Semantic Error: Variable '{var_name}' already declared")
-    
-    def _analyze_operation(self, node: ASTNode):
-        """
-        Analyze arithmetic and concatenation operations.
-        
-        :param node: Operation node to analyze
-        """
-        # Validate operand count
+    def check_operation(self, node: ASTNode):
+        """Check semantic rules for arithmetic operations"""
         if len(node.children) < 2:
-            self.errors.append(f"Semantic Error: Insufficient operands for operation {node.value}")
+            self.errors.append(f"Insufficient operands for operation: {node.value}")
     
-    def _analyze_comparison(self, node: ASTNode):
-        """
-        Analyze comparison operations.
-        
-        :param node: Comparison node to analyze
-        """
-        # Validate operand count
+    def check_comparison(self, node: ASTNode):
+        """Check semantic rules for comparisons"""
         if len(node.children) != 2:
-            self.errors.append(f"Semantic Error: Invalid number of operands for comparison {node.value}")
+            self.errors.append(f"Invalid comparison: {node.value}")
     
-    def _analyze_boolean_operation(self, node: ASTNode):
-        """
-        Analyze boolean operations.
-        
-        :param node: Boolean operation node to analyze
-        """
-        # Validate operand count based on operation type
-        if node.value in {'AND', 'OR', 'XOR'} and len(node.children) != 2:
-            self.errors.append(f"Semantic Error: Binary boolean operation {node.value} requires 2 operands")
-        elif node.value == 'NOT' and len(node.children) != 1:
-            self.errors.append(f"Semantic Error: Unary NOT operation requires 1 operand")
-    
-    def _analyze_function_call(self, node: ASTNode):
-        """
-        Analyze function calls for parameter count and existence.
-        
-        :param node: Function call node to analyze
-        """
+    def check_function_call(self, node: ASTNode):
+        """Check semantic rules for function calls"""
         func_name = node.value
         
         # Check if function exists
         if func_name not in self.symbol_table.functions:
-            self.errors.append(f"Semantic Error: Undefined function '{func_name}'")
+            self.errors.append(f"Function '{func_name}' not defined")
         else:
-            # Check parameter count
+            # Check argument count
             expected_params = len(self.symbol_table.functions[func_name])
-            actual_params = len(node.children)
+            actual_args = len(node.children)
             
-            if expected_params != actual_params:
-                self.errors.append(
-                    f"Semantic Error: Function '{func_name}' called with {actual_params} "
-                    f"arguments, but expects {expected_params}"
-                )
+            if expected_params != actual_args:
+                self.errors.append(f"Function '{func_name}' expects {expected_params} arguments, got {actual_args}")
     
-    def _analyze_function_definition(self, node: ASTNode):
-        """
-        Analyze function definition.
+    def infer_type(self, node: ASTNode):
+        """Infer the type of an AST node"""
+        if node.node_type == NodeType.LITERAL:
+            if isinstance(node.value, int):
+                return 'NUMBR'
+            elif isinstance(node.value, float):
+                return 'NUMBAR'
+            elif isinstance(node.value, str):
+                return 'YARN'
+            elif isinstance(node.value, bool):
+                return 'TROOF'
         
-        :param node: Function definition node to analyze
-        """
-        # Check for duplicate function definitions
-        func_name = node.value
-        if func_name in self.symbol_table.functions:
-            self.errors.append(f"Semantic Error: Function '{func_name}' already defined")
-    
-    def _analyze_function_return(self, node: ASTNode):
-        """
-        Analyze function returns.
-        
-        :param node: Function return node to analyze
-        """
-        # Additional return-related checks could be added here
-        pass
-    
-    def _analyze_typecasting(self, node: ASTNode):
-        """
-        Analyze type casting operations.
-        
-        :param node: Typecasting node to analyze
-        """
-        valid_types = {'NUMBR', 'NUMBAR', 'YARN', 'TROOF'}
-        
-        if node.value not in valid_types:
-            self.errors.append(f"Semantic Error: Invalid type casting to {node.value}")
-    
-    def _analyze_recasting(self, node: ASTNode):
-        """
-        Analyze type recasting operations.
-        
-        :param node: Recasting node to analyze
-        """
-        valid_types = {'NUMBR', 'NUMBAR', 'YARN', 'TROOF'}
-        
-        if node.value not in valid_types:
-            self.errors.append(f"Semantic Error: Invalid type recasting to {node.value}")
-    
-    def _analyze_if_statement(self, node: ASTNode):
-        """
-        Analyze if-statement structure.
-        
-        :param node: If-statement node to analyze
-        """
-        # Validate condition exists
-        if not node.children or len(node.children) < 2:
-            self.errors.append("Semantic Error: If statement requires a condition and a true block")
-    
-    def _analyze_switch_case(self, node: ASTNode):
-        """
-        Analyze switch-case structure.
-        
-        :param node: Switch-case node to analyze
-        """
-        # Validate condition exists
-        if not node.children or len(node.children) < 1:
-            self.errors.append("Semantic Error: Switch-case requires a condition")
-    
-    def _analyze_loop(self, node: ASTNode):
-        """
-        Analyze loop structure.
-        
-        :param node: Loop node to analyze
-        """
-        # Check loop name
-        if not node.value:
-            self.errors.append("Semantic Error: Loop requires a name")
-    
-    def get_semantic_errors(self) -> List[str]:
-        """
-        Retrieve all semantic errors found during analysis.
-        
-        :return: List of semantic error messages
-        """
-        return self.errors
+        # Fallback type
+        return 'NOOB'
 
-class LOLCODESemanticParserGUI:
+class LOLCODECompilerGUI:
     def __init__(self, master):
         self.master = master
-        master.title("LOLCODE Semantic Analyzer")
-        master.geometry("800x600")
-
-        # File selection frame
-        self.file_frame = tk.Frame(master)
-        self.file_frame.pack(pady=10, padx=10, fill=tk.X)
-
-        self.file_label = tk.Label(self.file_frame, text="Selected File:")
-        self.file_label.pack(side=tk.LEFT)
-
-        self.file_path = tk.StringVar()
-        self.file_entry = tk.Entry(self.file_frame, textvariable=self.file_path, width=50)
-        self.file_entry.pack(side=tk.LEFT, padx=5)
-
-        self.browse_button = tk.Button(self.file_frame, text="Browse", command=self.browse_file)
-        self.browse_button.pack(side=tk.LEFT)
-
-        # Notebook for different views
-        self.notebook = ttk.Notebook(master)
-        self.notebook.pack(expand=True, fill=tk.BOTH, padx=10, pady=10)
-
-        # Tokens view
-        self.tokens_frame = tk.Frame(self.notebook)
-        self.tokens_text = tk.Text(self.tokens_frame, wrap=tk.WORD, height=20)
-        self.tokens_text.pack(expand=True, fill=tk.BOTH)
-        self.notebook.add(self.tokens_frame, text="Tokens")
-
-        # AST view
-        self.ast_frame = tk.Frame(self.notebook)
-        self.ast_text = tk.Text(self.ast_frame, wrap=tk.WORD, height=20)
-        self.ast_text.pack(expand=True, fill=tk.BOTH)
-        self.notebook.add(self.ast_frame, text="Abstract Syntax Tree")
-
-        # Symbol Table view
-        self.symbol_frame = tk.Frame(self.notebook)
-        self.symbol_text = tk.Text(self.symbol_frame, wrap=tk.WORD, height=20)
-        self.symbol_text.pack(expand=True, fill=tk.BOTH)
-        self.notebook.add(self.symbol_frame, text="Symbol Tables")
-
-        # Semantic Errors view
-        self.semantic_frame = tk.Frame(self.notebook)
-        self.semantic_text = tk.Text(self.semantic_frame, wrap=tk.WORD, height=20)
-        self.semantic_text.pack(expand=True, fill=tk.BOTH)
-        self.notebook.add(self.semantic_frame, text="Semantic Errors")
-
-        # Parse button
-        self.parse_button = tk.Button(master, text="Analyze LOLCODE", command=self.analyze_lolcode)
-        self.parse_button.pack(pady=10)
-
-    def browse_file(self):
-        filename = filedialog.askopenfilename(
-            title="Select LOLCODE File", 
-            filetypes=[("LOLCODE Files", "*.lol")]
-        )
-        if filename:
-            self.file_path.set(filename)
-
-    def analyze_lolcode(self):
+        master.title("LOLCODE Compiler")
+        master.geometry("1200x800")
+        
+        # Create main frame
+        self.main_frame = ttk.Frame(master)
+        self.main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Layout with grid
+        self.main_frame.columnconfigure(0, weight=3)
+        self.main_frame.columnconfigure(1, weight=1)
+        
+        # File Explorer (1)
+        self.setup_file_explorer()
+        
+        # Text Editor (2)
+        self.setup_text_editor()
+        
+        # Tokens List (3)
+        self.setup_tokens_list()
+        
+        # Symbol Table (4)
+        self.setup_symbol_table()
+        
+        # Execute Button (5)
+        self.setup_execute_button()
+        
+        # Console (6)
+        self.setup_console()
+    
+    def setup_file_explorer(self):
+        file_frame = ttk.LabelFrame(self.main_frame, text="File Explorer")
+        file_frame.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
+        
+        self.file_button = ttk.Button(file_frame, text="Open File", command=self.open_file)
+        self.file_button.pack(padx=5, pady=5)
+    
+    def setup_text_editor(self):
+        editor_frame = ttk.LabelFrame(self.main_frame, text="Text Editor")
+        editor_frame.grid(row=0, column=1, sticky='nsew', padx=5, pady=5)
+        
+        self.text_editor = tk.Text(editor_frame, wrap=tk.WORD, height=20)
+        self.text_editor.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
+    
+    def setup_tokens_list(self):
+        tokens_frame = ttk.LabelFrame(self.main_frame, text="Tokens")
+        tokens_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+        
+        self.tokens_tree = ttk.Treeview(tokens_frame, columns=('Lexeme', 'Token'), show='headings')
+        self.tokens_tree.heading('Lexeme', text='Lexeme')
+        self.tokens_tree.heading('Token', text='Token')
+        self.tokens_tree.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
+    
+    def setup_symbol_table(self):
+        symbol_frame = ttk.LabelFrame(self.main_frame, text="Symbol Table")
+        symbol_frame.grid(row=1, column=1, sticky='nsew', padx=5, pady=5)
+        
+        self.symbol_tree = ttk.Treeview(symbol_frame, columns=('Variable', 'Type', 'Value'), show='headings')
+        self.symbol_tree.heading('Variable', text='Variable')
+        self.symbol_tree.heading('Type', text='Type')
+        self.symbol_tree.heading('Value', text='Value')
+        self.symbol_tree.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
+    
+    def setup_execute_button(self):
+        execute_frame = ttk.Frame(self.main_frame)
+        execute_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=5, pady=5)
+        
+        self.execute_button = ttk.Button(execute_frame, text="Execute", command=self.execute_code)
+        self.execute_button.pack(pady=5)
+    
+    def setup_console(self):
+        console_frame = ttk.LabelFrame(self.main_frame, text="Console")
+        console_frame.grid(row=3, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
+        
+        self.console = tk.Text(console_frame, wrap=tk.WORD, height=10, state='disabled')
+        self.console.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
+    
+    def open_file(self):
+        file_path = filedialog.askopenfilename(filetypes=[("LOLCODE Files", "*.lol")])
+        if file_path:
+            with open(file_path, 'r') as file:
+                code = file.read()
+                self.text_editor.delete('1.0', tk.END)
+                self.text_editor.insert(tk.END, code)
+    
+    def execute_code(self):
         # Clear previous results
-        for text_widget in [self.tokens_text, self.ast_text, self.symbol_text, self.semantic_text]:
-            text_widget.delete('1.0', tk.END)
+        self.tokens_tree.delete(*self.tokens_tree.get_children())
+        self.symbol_tree.delete(*self.symbol_tree.get_children())
+        self.console.config(state='normal')
+        self.console.delete('1.0', tk.END)
 
-        # Get the file path
-        file_path = self.file_path.get()
-        if not file_path:
-            messagebox.showerror("Error", "Please select a LOLCODE file")
-            return
+        # Get code from text editor
+        code = self.text_editor.get('1.0', tk.END).strip()
 
         try:
-            # Read the file
-            with open(file_path, 'r') as file:
-                source_code = file.read()
+            # Tokenization
+            tokens = tokenize_lolcode(code)
 
-            # Tokenize
-            tokens = tokenize_lolcode(source_code)
-            
-            # Display tokens
-            self.tokens_text.insert(tk.END, "TOKENS:\n")
+            # Populate tokens list
             for token in tokens:
-                self.tokens_text.insert(tk.END, f"{token}\n")
+                self.tokens_tree.insert('', 'end', values=(token[1], token[0]))
 
-            # Parse
+            # Syntax Analysis
             syntax_analyzer = LOLCODESyntaxAnalyzer(tokens)
             ast = syntax_analyzer.parse_program()
+            print(ast)
 
-            # Display AST
-            self.ast_text.insert(tk.END, "ABSTRACT SYNTAX TREE:\n")
-            self.ast_text.insert(tk.END, str(ast))
-
-            # Display Symbol Tables
-            self.symbol_text.insert(tk.END, "SYMBOL TABLES:\n")
-            self.symbol_text.insert(tk.END, "Variables:\n")
-            for var, type in syntax_analyzer.symbol_table.variables.items():
-                self.symbol_text.insert(tk.END, f"{var}: {type}\n")
-            
-            self.symbol_text.insert(tk.END, "\nFunctions:\n")
-            for func, params in syntax_analyzer.symbol_table.functions.items():
-                self.symbol_text.insert(tk.END, f"{func}: {params}\n")
-            
-            self.symbol_text.insert(tk.END, "\nLoops:\n")
-            for loop in syntax_analyzer.symbol_table.loops:
-                self.symbol_text.insert(tk.END, f"{loop}\n")
-
-            # Perform Semantic Analysis
+            # Semantic Analysis
             semantic_analyzer = SemanticAnalyzer(ast, syntax_analyzer.symbol_table)
-            is_semantically_valid = semantic_analyzer.analyze()
+            semantic_result = semantic_analyzer.analyze()
 
-            # Display Semantic Errors
-            semantic_errors = semantic_analyzer.get_semantic_errors()
-            self.semantic_text.insert(tk.END, "SEMANTIC ANALYSIS:\n")
-            if is_semantically_valid:
-                self.semantic_text.insert(tk.END, "No semantic errors found!\n")
+            if semantic_result:
+                # Populate Symbol Table
+                for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
+                    var_type = details['type']
+                    var_value = details['value']
+                    self.symbol_tree.insert('', 'end', values=(var_name, var_type, var_value))
+
+                # Interpret and Execute Code
+                interpreter = ASTInterpreter(ast, syntax_analyzer.symbol_table)
+
+                # Redirect stdout to capture console output
+                old_stdout = sys.stdout
+                redirected_output = sys.stdout = StringIO()
+
+                try:
+                    interpreter.interpret(ast)  # Interpret the AST
+                    output = redirected_output.getvalue()
+                    self.console.insert(tk.END, output)
+                except Exception as e:
+                    self.console.insert(tk.END, f"Runtime Error: {e}\n")
+                finally:
+                    # Restore stdout
+                    sys.stdout = old_stdout
+
+                self.console.config(state='disabled')
             else:
-                for error in semantic_errors:
-                    self.semantic_text.insert(tk.END, f"• {error}\n")
-
-            print('Program analyzed successfully!')
+                # Display semantic errors
+                for error in semantic_analyzer.errors:
+                    self.console.insert(tk.END, f"Semantic Error: {error}\n")
+                self.console.config(state='disabled')
 
         except Exception as e:
-            messagebox.showerror("Analysis Error", str(e))
+            self.console.config(state='normal')
+            self.console.insert(tk.END, f"Error: {str(e)}\n")
+            self.console.config(state='disabled')
+
 
 def main():
     root = tk.Tk()
-    LOLCODESemanticParserGUI(root)
+    app = LOLCODECompilerGUI(root)
     root.mainloop()
 
 if __name__ == "__main__":
