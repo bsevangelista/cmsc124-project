@@ -14,6 +14,7 @@ from lexical_analyzer import tokenize_lolcode
 #     parse boolean operation [test case 5]
 #     other parsers
 #     Reusing the NodeType and ASTNode from the previous syntax analyzer
+
 class NodeType(Enum):
     PROGRAM = auto()
     STATEMENT_LIST = auto()
@@ -35,6 +36,8 @@ class NodeType(Enum):
     RECASTING = auto()
     FUNCTION_RETURN = auto()
     COMMENT = auto()
+    UNARY_OP = auto()
+    PARAMETER_LIST = auto()
 
 class ASTNode:
     def __init__(self, node_type: NodeType, value: Optional[str] = None, token_type=None, children: Optional[List['ASTNode']] = None):
@@ -144,10 +147,11 @@ class LOLCODESyntaxAnalyzer:
         # self.consume('NEWLINE')
         self.consume('HAI')
         # Enforce a newline after HAI
-        if self.peek() and self.peek()[0] == 'NEWLINE':
-            self.consume('NEWLINE')
-        else:
-            raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2]}")
+        self.expect_newline()
+        # if self.peek() and self.peek()[0] == 'NEWLINE':
+        #     self.consume('NEWLINE')
+        # else:
+        #     raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2]}")
 
         while self.peek() and self.peek()[0] != 'KTHXBYE':
             statement_list = self.parse_statement_list()
@@ -159,7 +163,7 @@ class LOLCODESyntaxAnalyzer:
         """Parse a list of statements with optional GTFO support
         :param allow_gtfo: Whether to allow GTFO (break) statement """
         statements = []
-        while self.peek() and self.peek()[0] not in {'KTHXBYE', 'OIC', 'OMGWTF', 'OMG'}:
+        while self.peek() and self.peek()[0] not in {'KTHXBYE', 'OIC', 'OMGWTF', 'OMG', 'IM_OUTTA_YR', 'IF_U_SAY_SO'}:
             
             # Check for GTFO if allowed
             if allow_gtfo and self.peek() and self.peek()[0] == 'GTFO':
@@ -201,13 +205,9 @@ class LOLCODESyntaxAnalyzer:
             'SUM_OF': self.parse_operation,
             'BOTH_SAEM': self.parse_comparison,
             'DIFFRINT': self.parse_comparison,
-            # 'O_RLY': self.parse_if_statement,
-            # 'WTF': self.parse_switch_case,
             'IM_IN_YR': self.parse_loop,
             'HOW_IZ_I': self.parse_function_definition,
             'I_IZ': self.parse_function_call,
-            # 'BTW': self.parse_comment,
-            # 'OBTW': self.parse_multi_line_comment,
             'MAEK': self.parse_typecasting,
             'IS_NOW_A': self.parse_recasting,
             'FOUND_YR': self.parse_function_return,
@@ -257,7 +257,6 @@ class LOLCODESyntaxAnalyzer:
         #     raise SyntaxError("FUCKs")
         # If no special handling, treat as simple expression
         return ASTNode(NodeType.EXPRESSION, value=var_token[1])
-
         
     def parse_print(self) -> ASTNode:
         self.consume('VISIBLE')
@@ -572,8 +571,6 @@ class LOLCODESyntaxAnalyzer:
 
         return ASTNode(NodeType.IF_STATEMENT, children=children)
 
-
-    
     # Placeholder methods for advanced parsing
     def parse_switch_case(self, condition: ASTNode) -> ASTNode:
         """Parse switch-case (WTF?) statement with enhanced support for VAR_ID condition"""
@@ -628,41 +625,60 @@ class LOLCODESyntaxAnalyzer:
         return ASTNode(NodeType.SWITCH_CASE, children=children)
     
     def parse_loop(self) -> ASTNode:
-        """Parse loop (IM IN YR) statement"""
+        """Parse loop (IM IN YR) statement according to the specified grammar"""
+        # Consume IM IN YR and loop identifier
         self.consume('IM_IN_YR')
         loop_name = self.consume('VAR_ID')[1]
         
-        # Optional loop condition mode
-        mode = None
-        if self.peek() and self.peek()[0] in {'UPPIN', 'NERFIN'}:
-            mode = self.consume()[0]
-            self.consume('YR')
-            var_token = self.consume('VAR_ID')
+        # Parse loop operation (UPPIN or NERFIN)
+        if not self.peek() or self.peek()[0] not in {'UPPIN', 'NERFIN'}:
+            raise SyntaxError(f"Expected UPPIN or NERFIN, found {self.peek()[0]} at line {self.peek()[2]}")
         
-        # Optional condition
+        mode = self.consume()[0]  # Consume UPPIN or NERFIN
+        
+        # Consume YR and variable identifier
+        self.consume('YR')
+        var_token = self.consume('VAR_ID')
+        
+        # Optional condition (TIL or WILE)
         condition = None
-        if self.peek() and self.peek()[0] == 'WILE':
-            self.consume('WILE')
-            condition = self.parse_expression()
+        if self.peek() and self.peek()[0] in {'TIL', 'WILE'}:
+            condition_type = self.consume()[0]
+            if condition_type == 'TIL':
+                # For TIL, we'll negate the condition
+                condition = ASTNode(NodeType.UNARY_OP, value='NOT', 
+                    children=[self.parse_expression()])
+            else:  # WILE
+                condition = self.parse_expression()
         
-        # Loop body
+        # Expect a line break
+        self.expect_newline()
+        
+        # Parse statement list for loop body
         body = self.parse_statement_list()
         
         # Closing loop
         self.consume('IM_OUTTA_YR')
-        self.consume('VAR_ID')  # Match loop name
+        closing_name = self.consume('VAR_ID')[1]
+        
+        # Verify loop names match
+        if closing_name != loop_name:
+            raise SyntaxError(f"Loop identifiers do not match. Started with {loop_name}, ended with {closing_name}")
         
         # Add loop to symbol table
         self.symbol_table.add_loop(loop_name)
         
         return ASTNode(NodeType.LOOP, value=loop_name, children=[
-            ASTNode(NodeType.LITERAL, value=mode) if mode else None,
+            ASTNode(NodeType.LITERAL, value=mode),
             condition,
             body
         ])
     
     def parse_function_definition(self) -> ASTNode:
-        """Parse function definition (HOW IZ I)"""
+        """
+        Parse function definition following the grammar: 
+        HOW IZ I funcident [YR varident [AN YR varident ...]] <linebreak> <statement_list> IF U SAY SO
+        """
         self.consume('HOW_IZ_I')
         func_name = self.consume('VAR_ID')[1]
         
@@ -673,6 +689,13 @@ class LOLCODESyntaxAnalyzer:
                 self.consume('YR')
                 param = self.consume('VAR_ID')[1]
                 params.append(param)
+                
+                # Optional AN before next parameter
+                if self.peek() and self.peek()[0] == 'AN':
+                    self.consume('AN')
+        
+        # Expect a line break after parameters
+        self.expect_newline()
         
         # Function body
         body = self.parse_statement_list()
@@ -684,13 +707,13 @@ class LOLCODESyntaxAnalyzer:
         self.symbol_table.add_function(func_name, params)
         
         return ASTNode(NodeType.FUNCTION_DEFINITION, 
-                       value=func_name, 
-                       children=[
-                           ASTNode(NodeType.STATEMENT_LIST, children=[
-                               ASTNode(NodeType.LITERAL, value=param) for param in params
-                           ]),
-                           body
-                       ])
+                    value=func_name, 
+                    children=[
+                        ASTNode(NodeType.PARAMETER_LIST, children=[
+                            ASTNode(NodeType.LITERAL, value=param) for param in params
+                        ]),
+                        body
+                    ])
     
     def parse_function_call(self) -> ASTNode:
         """Parse function call (I IZ)"""
@@ -704,6 +727,10 @@ class LOLCODESyntaxAnalyzer:
                 self.consume('YR')
                 arg = self.parse_expression()
                 args.append(arg)
+
+                # Optional AN before next parameter
+                if self.peek() and self.peek()[0] == 'AN':
+                    self.consume('AN')
         
         return ASTNode(NodeType.FUNCTION_CALL, 
                        value=func_name, 
@@ -723,7 +750,6 @@ class LOLCODESyntaxAnalyzer:
         
         return ASTNode(NodeType.TYPECASTING, value=type_token[1], children=[expr])
 
-    
     def parse_recasting(self, var_name: str) -> ASTNode:
         """Parse recasting (IS NOW A) operation""" 
         self.consume('IS_NOW_A')
@@ -734,8 +760,12 @@ class LOLCODESyntaxAnalyzer:
         if type_token[0] not in valid_types:
             raise SyntaxError(f"Invalid type for recasting: {type_token[0]}")
         
-        # Update symbol table
-        self.symbol_table.add_variable(var_name, type_token[1])
+        # Retrieve the current value of the variable
+        current_var = self.symbol_table.variables.get(var_name, {})
+        current_value = current_var.get('value', '')
+        
+        # Update symbol table with the new type, keeping the existing value
+        self.symbol_table.add_variable(var_name, type_token[1], current_value)
         
         return ASTNode(NodeType.RECASTING, value=type_token[1], children=[
             ASTNode(NodeType.EXPRESSION, value=var_name)
@@ -748,18 +778,6 @@ class LOLCODESyntaxAnalyzer:
         
         return ASTNode(NodeType.FUNCTION_RETURN, children=[return_value])
     
-    # def parse_comment(self) -> ASTNode:
-    #     self.consume('BTW')
-    #     return ASTNode(NodeType.COMMENT, value=self.consume('MISMATCH')[1])
-    
-    # def parse_multi_line_comment(self) -> ASTNode:
-    #     self.consume('OBTW')
-    #     # Consume until TLDR is found
-    #     comment_parts = []
-    #     while self.peek() and self.peek()[0] != 'TLDR':
-    #         comment_parts.append(self.consume()[1])
-    #     self.consume('TLDR')
-    #     return ASTNode(NodeType.COMMENT, value=' '.join(comment_parts))
 
 class LOLCODEParserGUI:
     def __init__(self, master):
