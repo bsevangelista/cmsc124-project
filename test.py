@@ -54,7 +54,7 @@ class ASTNode:
 
 class SymbolTable:
     def __init__(self):
-        self.variables = {"IT":{"type": 'NOOB', "value": ''}}
+        self.variables = {"IT":{"type": 'NOOB', "value": 'NOOB'}}
         self.functions = {}
         self.loops = {}
     
@@ -74,6 +74,16 @@ class SymbolTable:
     
     def add_loop(self, name: str):
         self.loops[name] = True
+
+    def update_variable(self, name, type: str, value: any):
+        """Update the value of an existing variable."""
+        if value is None:
+            value = 0 if type in ["NUMBR", "NUMBAR"] else ""
+        if name in self.variables:
+            self.variables[name]["value"] = value
+            self.variables[name]["type"] = type
+        else:
+            raise KeyError(f"Variable '{name}' not found in symbol table.")
 
 class LOLCODESyntaxAnalyzer:
     def __init__(self, tokens: List[Tuple[str, str, int]]):
@@ -144,10 +154,7 @@ class LOLCODESyntaxAnalyzer:
         # self.consume('NEWLINE')
         self.consume('HAI')
         # Enforce a newline after HAI
-        if self.peek() and self.peek()[0] == 'NEWLINE':
-            self.consume('NEWLINE')
-        else:
-            raise SyntaxError(f"Expected NEWLINE, found {self.peek()[0]} at line {self.peek()[2]}")
+        self.expect_newline()
 
         while self.peek() and self.peek()[0] != 'KTHXBYE':
             statement_list = self.parse_statement_list()
@@ -309,7 +316,7 @@ class LOLCODESyntaxAnalyzer:
                 self.symbol_table.add_variable(var_token[1], inferred_type, inferred_value)
             else:
                 declarations.append(ASTNode(NodeType.DECLARATION, value=var_token[1], children=[]))
-                self.symbol_table.add_variable(var_token[1], 'NOOB', '')  # Default type if no value
+                self.symbol_table.add_variable(var_token[1], 'NOOB', 'NOOB')  # Default type if no value
             
             # Ensure NEWLINE after each declaration
             self.expect_newline()
@@ -342,14 +349,14 @@ class LOLCODESyntaxAnalyzer:
             elif token_type == 'TROOF':
                 return 'TROOF', str(value.value)
             else:
-                return 'NOOB', ''  # Default for undefined or invalid token types
+                return 'NOOB', 'NOOB'  # Default for undefined or invalid token types
         elif value.node_type == NodeType.EXPRESSION:
             # Handle cases where the type is inferred from expressions or operations
             var_info = self.symbol_table.variables.get(value.value, {})
             return var_info.get("type", "NOOB"), var_info.get("value", None)
         
         # Default for nodes without a clear type
-        return 'NOOB', ''
+        return 'NOOB', 'NOOB'
     
     def parse_assignment(self) -> ASTNode:
         var_token = self.consume('VAR_ID')

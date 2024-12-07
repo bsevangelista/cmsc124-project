@@ -8,6 +8,125 @@ from io import StringIO
 from test import LOLCODESyntaxAnalyzer, NodeType, ASTNode, SymbolTable
 from lexical_analyzer import tokenize_lolcode
 
+class ASTInterpreter:
+    def __init__(self, ast: ASTNode, symbol_table: SymbolTable):
+        self.ast = ast
+        self.symbol_table = symbol_table
+
+    def evaluate_node(self, node: ASTNode):
+        """Recursively evaluate an AST node."""
+        if node.node_type == NodeType.LITERAL:
+            if isinstance(node.value, str):
+                try:
+                    if '.' in node.value:
+                        return float(node.value)
+                    else:
+                        return int(node.value)
+                except ValueError:
+                    return node.value  # Return as string if conversion fails
+        elif node.node_type == NodeType.EXPRESSION:
+            if node.children:
+                return self.evaluate_node(node.children[0])  # Evaluate the child node
+            elif node.children == []: # Handle explicit variable
+                var_details = self.symbol_table.variables.get(node.value)
+                if var_details:
+                    return var_details['value']
+                else:
+                    raise ValueError(f"Variable '{node.value}' not defined.")
+            else:
+                raise IndexError(f"Expression {node} {node.children} has no children.")
+        elif node.node_type == NodeType.OPERATION:
+            if len(node.children) < 2:
+                raise IndexError(f"Operation node '{node.value}' requires at least 2 operands.")
+        
+            # Handle specific operations
+            values = [self.evaluate_node(child) for child in node.children]
+            if None in values:
+                raise ValueError(f"Operation '{node.value}' has NoneType operand(s): {values}")
+            
+            if node.value == "SUM":
+                return sum(values)
+            elif node.value == "DIFF":
+                return values[0] - values[1]
+            elif node.value == "PRODUKT":
+                result = 1
+                for value in values:
+                    if isinstance(value, (int, float)):
+                        result *= value
+                    else:
+                        raise TypeError(f"Cannot multiply non-numeric type: {type(value)}")
+                return result
+            elif node.value == "QUOSHUNT":
+                if values[1] == 0:
+                    raise ZeroDivisionError("Division by zero in QUOSHUNT operation.")
+                return values[0] // values[1]
+            elif node.value == "BIGGR":
+                return max(values)
+            elif node.value == "SMALLR":
+                return min(values)
+        # elif node.node_type == NodeType.VARIABLE:
+        #     var_details = self.symbol_table.variables.get(node.value)
+        #     if var_details:
+        #         return var_details['value']
+        #     else:
+        #         raise ValueError(f"Variable '{node.value}' not defined.")
+        else:
+            raise ValueError(f"Unknown node type: {node.node_type}")
+
+    def update_to_symbol_table(self, name, value):
+        if isinstance(value, float):
+            self.symbol_table.update_variable(name, 'NUMBAR', value)
+        elif isinstance(value, int):
+            self.symbol_table.update_variable(name, 'NUMBR', value)
+        elif isinstance(value, str):
+            self.symbol_table.update_variable(name, 'YARN', value)
+        else:
+            self.symbol_table.update_variable(name, 'NOOB', value)
+
+    def add_to_symbol_table(self, name, value):
+        if isinstance(value, float):
+            self.symbol_table.update_variable(name, 'NUMBAR', value)
+        elif isinstance(value, int):
+            self.symbol_table.update_variable(name, 'NUMBR', value)
+        elif isinstance(value, str):
+            self.symbol_table.update_variable(name, 'YARN', value)
+        else:
+            self.symbol_table.update_variable(name, 'NOOB', value)
+
+    def interpret(self, node: ASTNode):
+        """Interpret the AST, focusing on program logic."""
+        if not node:
+            raise ValueError("Node is None during interpretation.")
+        
+        if node.node_type in [NodeType.PROGRAM, NodeType.STATEMENT_LIST]:
+            for child in node.children:
+                self.interpret(child)
+        
+        elif node.node_type == NodeType.PRINT:
+            if not node.children:
+                raise ValueError("PRINT node must have a child to print.")
+            value = self.evaluate_node(node.children[0])
+            self.update_to_symbol_table('IT', value)
+            print(value)
+        
+        elif node.node_type == NodeType.DECLARATION:
+            if not node.children or len(node.children) < 1:
+                pass
+            else:
+                var_name = node.value
+                value = self.evaluate_node(node.children[0])
+                self.add_to_symbol_table(var_name, value)
+        
+        elif node.node_type == NodeType.ASSIGNMENT:
+            if not node.children or len(node.children) < 1:
+                raise ValueError("ASSIGNMENT node requires at least one child.")
+            var_name = node.value
+            value = self.evaluate_node(node.children[0])
+            self.update_to_symbol_table(var_name, value)  # Update symbol table for assignments
+        
+        else:
+            print(f"Unhandled node type: {node.node_type}")
+
 class SemanticAnalyzer:
     def __init__(self, ast: ASTNode, symbol_table: SymbolTable):
         self.ast = ast
@@ -184,64 +303,77 @@ class LOLCODECompilerGUI:
                 self.text_editor.insert(tk.END, code)
     
     def execute_code(self):
-        # Clear previous results
+    # Clear previous results
         self.tokens_tree.delete(*self.tokens_tree.get_children())
         self.symbol_tree.delete(*self.symbol_tree.get_children())
         self.console.config(state='normal')
         self.console.delete('1.0', tk.END)
-        
+
         # Get code from text editor
         code = self.text_editor.get('1.0', tk.END).strip()
-        
+
         try:
             # Tokenization
             tokens = tokenize_lolcode(code)
-            
+
             # Populate tokens list
             for token in tokens:
                 self.tokens_tree.insert('', 'end', values=(token[1], token[0]))
-            
+
             # Syntax Analysis
             syntax_analyzer = LOLCODESyntaxAnalyzer(tokens)
             ast = syntax_analyzer.parse_program()
-            
+            print(ast)
             # Semantic Analysis
             semantic_analyzer = SemanticAnalyzer(ast, syntax_analyzer.symbol_table)
             semantic_result = semantic_analyzer.analyze()
-            
-            # If no semantic errors, display symbol table
+
             if semantic_result:
-                for var, type_val in syntax_analyzer.symbol_table.variables.items():
-                    self.symbol_tree.insert('', 'end', values=(var, type_val, ''))
-                
-                # Capture console output
+                # Populate Symbol Table
+                # for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
+                #     var_type = details['type']
+                #     var_value = details['value']
+                #     self.symbol_tree.insert('', 'end', values=(var_name, var_type, var_value))
+                    # print(var_name,details)
+
+                # Interpret and Execute Code
+                interpreter = ASTInterpreter(ast, syntax_analyzer.symbol_table)
+
+                # Redirect stdout to capture console output
                 old_stdout = sys.stdout
                 redirected_output = sys.stdout = StringIO()
-                
+
                 try:
-                    # Here you would add code interpretation/execution
-                    # This is a placeholder - you'd need to implement an actual interpreter
-                    self.console.config(state='normal')
-                    self.console.insert(tk.END, "Code executed successfully!\n")
-                    self.console.config(state='disabled')
+                    interpreter.interpret(ast)  # Interpret the AST
+                    # print(ast)
+                    for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
+                        print(var_name,details)
+                    output = redirected_output.getvalue()
+                    self.console.insert(tk.END, output)
                 except Exception as e:
-                    self.console.config(state='normal')
-                    self.console.insert(tk.END, f"Runtime Error: {str(e)}\n")
-                    self.console.config(state='disabled')
-                
-                # Restore stdout
-                sys.stdout = old_stdout
+                    self.console.insert(tk.END, f"Runtime Error: {e}\n")
+                finally:
+                    # Restore stdout
+                    sys.stdout = old_stdout
+
+                # Populate Symbol Table after interpretation
+                for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
+                    var_type = details['type']
+                    var_value = details['value']
+                    self.symbol_tree.insert('', 'end', values=(var_name, var_type, var_value))
+
+                self.console.config(state='disabled')
             else:
                 # Display semantic errors
-                self.console.config(state='normal')
                 for error in semantic_analyzer.errors:
                     self.console.insert(tk.END, f"Semantic Error: {error}\n")
                 self.console.config(state='disabled')
-        
+
         except Exception as e:
             self.console.config(state='normal')
             self.console.insert(tk.END, f"Error: {str(e)}\n")
             self.console.config(state='disabled')
+
 
 def main():
     root = tk.Tk()
