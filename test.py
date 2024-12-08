@@ -15,7 +15,6 @@ class NodeType(Enum):
     OPERATION = auto()
     BOOLEAN_OPERATION = auto()
     COMPARISON = auto()
-    IF_STATEMENT = auto()
     SWITCH_CASE = auto()
     LOOP = auto()
     FUNCTION_DEFINITION = auto()
@@ -28,6 +27,10 @@ class NodeType(Enum):
     COMMENT = auto()
     UNARY_OP = auto()
     PARAMETER_LIST = auto()
+    IF_ELSE = auto()
+    ELSEIF_STATEMENT = auto()
+    ELSE_STATEMENT = auto()
+    IF_STATEMENT = auto()
 
 class ASTNode:
     def __init__(self, node_type: NodeType, value: Optional[str] = None, token_type=None, children: Optional[List['ASTNode']] = None):
@@ -507,15 +510,26 @@ class LOLCODESyntaxAnalyzer:
             raise SyntaxError("Expected OIC to close the if-then statement")
 
         # Construct AST node
-        children = [condition, ASTNode(NodeType.STATEMENT_LIST, children=true_block)]
+        children = [ASTNode(NodeType.IF_STATEMENT, children=[condition, ASTNode(NodeType.STATEMENT_LIST, children=true_block)])]
+
+        # Add alternative blocks as ELIF_ELSE nodes
         if alternative_blocks:
             for cond, block in alternative_blocks:
-                alternative_node = ASTNode(NodeType.STATEMENT_LIST, children=[cond, ASTNode(NodeType.STATEMENT_LIST, children=block)])
-                children.append(alternative_node)
-        if false_block:
-            children.append(ASTNode(NodeType.STATEMENT_LIST, children=false_block))
+                elif_node = ASTNode(NodeType.ELSEIF_STATEMENT, children=[
+                    cond, 
+                    ASTNode(NodeType.STATEMENT_LIST, children=block)
+                ])
+                children.append(elif_node)
 
-        return ASTNode(NodeType.IF_STATEMENT, children=children)
+        # Add the ELSE block as an ELSE_STATEMENT node if it exists
+        if false_block:
+            else_node = ASTNode(NodeType.ELSE_STATEMENT, children=[
+                ASTNode(NodeType.STATEMENT_LIST, children=false_block)
+            ])
+            children.append(else_node)
+
+        # Return the umbrella IF_ELSE node
+        return ASTNode(NodeType.IF_ELSE, children=children)
 
     # Placeholder methods for advanced parsing
     def parse_switch_case(self, condition: ASTNode) -> ASTNode:

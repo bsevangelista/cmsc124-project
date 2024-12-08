@@ -345,6 +345,38 @@ class ASTInterpreter:
                 raise ValueError(f"Unknown typecasting target: {target_type}")
             # Update the symbol table with the recast value and its type
             self.symbol_table.update_variable(node.children[0].value, target_type, recast_value)
+        
+        elif node.node_type == NodeType.IF_ELSE:
+            if not node.children or len(node.children) < 1:
+                raise ValueError("IF_ELSE node must have at least one child.")
+
+            # Iterate through the children to evaluate conditions and execute blocks
+            for child in node.children:
+                if child.node_type == NodeType.IF_STATEMENT:
+                    # Handle the primary IF statement
+                    condition_node = child.children[0]
+                    statement_list_node = child.children[1]
+                    condition_result = self.evaluate_node(condition_node)
+                    
+                    if condition_result == 'WIN':  # True condition
+                        self.interpret(statement_list_node)
+                        return  # Exit after a block is executed
+                    
+                elif child.node_type == NodeType.ELSEIF_STATEMENT:
+                    # Handle ELSEIF statements
+                    condition_node = child.children[0]
+                    statement_list_node = child.children[1]
+                    condition_result = self.evaluate_node(condition_node)
+
+                    if condition_result == 'WIN':  # True condition
+                        self.interpret(statement_list_node)
+                        return  # Exit after a block is executed
+                    
+                elif child.node_type == NodeType.ELSE_STATEMENT:
+                    # Handle the ELSE statement (no condition, just execute block)
+                    statement_list_node = child.children[0]
+                    self.interpret(statement_list_node)
+                    return  # Exit after ELSE block is executed
         else:
             print(f"Unhandled node type: {node.node_type}")
         
