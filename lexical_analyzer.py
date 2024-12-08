@@ -33,7 +33,7 @@ def tokenize_lolcode(source_code):
             end_line = line_number
         elif kind == 'MISMATCH':
             if comment == False:
-                print(f"Unexpected character {value} at line {line_number}")
+                raise SyntaxError(f"Unexpected character {value} at line {line_number}")
 
         else:
             if comment == False:
