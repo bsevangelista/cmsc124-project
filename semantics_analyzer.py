@@ -38,6 +38,44 @@ class ASTInterpreter:
                     raise ValueError(f"Variable '{node.value}' not defined.")
             else:
                 raise IndexError(f"Expression {node} {node.children} has no children.")
+        elif node.node_type == NodeType.COMPARISON:
+            if len(node.children) < 2:
+                raise IndexError(f"Operation node '{node.value}' requires at least 2 operands.")
+            # Handle specific operations
+            values = [self.evaluate_node(child) for child in node.children]
+
+            if None in values:
+                raise ValueError(f"Operation '{node.value}' has NoneType operand(s): {values}")
+            
+            if any(isinstance(value, str) and (value == 'WIN' or value == 'FAIL') for value in values):
+                for i in range(len(values)):
+                    if values[i] == 'WIN':
+                        values[i] = 1
+                    elif values[i] == 'FAIL':
+                        values[i] = 0
+            
+            operation = node.value
+
+            if operation == "EQ":
+                if len(node.children) != 2:
+                    raise ValueError("EQ operation must have exactly two operands.")
+                left = self.evaluate_node(node.children[0])
+                right = self.evaluate_node(node.children[1])
+                if left == right:
+                    return 'WIN'
+                else:
+                    return 'FAIL'
+                
+            if operation == "NEQ":
+                if len(node.children) != 2:
+                    raise ValueError("NEQ operation must have exactly two operands.")
+                left = self.evaluate_node(node.children[0])
+                right = self.evaluate_node(node.children[1])
+                if left != right:
+                    return 'WIN'
+                else:
+                    return 'FAIL'
+
         elif node.node_type == NodeType.BOOLEAN_OPERATION:
             if not node.children:
                 raise ValueError("BOOLEAN_OPERATION must have at least one child.")
@@ -254,6 +292,7 @@ class ASTInterpreter:
                     value = int(user_input)
             except ValueError:
                 value = user_input  # Treat as string if conversion fails
+            print(user_input)
             self.update_to_symbol_table(var_name, value)
 
         elif node.node_type == NodeType.DECLARATION:
@@ -459,6 +498,9 @@ class LOLCODECompilerGUI:
         self.tokens_tree.heading('Lexeme', text='Lexeme')
         self.tokens_tree.heading('Token', text='Token')
         self.tokens_tree.heading('Classification', text='Classification')
+        self.tokens_tree.column('Lexeme', width=150)
+        self.tokens_tree.column('Token', width=100)
+        self.tokens_tree.column('Classification', width=150)
         self.tokens_tree.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
         
         # Populate the Treeview with lexemes and classifications
@@ -475,6 +517,9 @@ class LOLCODECompilerGUI:
         self.symbol_tree.heading('Variable', text='Variable')
         self.symbol_tree.heading('Type', text='Type')
         self.symbol_tree.heading('Value', text='Value')
+        self.symbol_tree.column('Variable', width=150)
+        self.symbol_tree.column('Type', width=100)
+        self.symbol_tree.column('Value', width=150)
         self.symbol_tree.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
         
         symbol_scroll = ttk.Scrollbar(symbol_frame, orient=tk.VERTICAL, command=self.symbol_tree.yview)
