@@ -535,7 +535,7 @@ class LOLCODESyntaxAnalyzer:
         cases = []
         default_case = None
 
-        # Parse OMG cases
+        """<case_list> ::= OMG <literal> <statement_list> [GTFO] | OMG <literal> <statement_list> [GTFO] <case_list>"""
         while self.peek() and self.peek()[0] == 'OMG':
             self.consume('OMG')
             case_value = self.parse_expression()  # Parse the case value (e.g., literal or variable)
