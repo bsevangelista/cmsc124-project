@@ -603,6 +603,8 @@ class LOLCODESyntaxAnalyzer:
                     children=[self.parse_expression()])
             else:  # WILE
                 condition = self.parse_expression()
+        else:
+            raise SyntaxError("Missing keyword 'TIL' or 'WILE'")
         
         # Expect a line break
         self.expect_newline()
