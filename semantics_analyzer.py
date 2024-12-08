@@ -18,12 +18,13 @@ class ASTInterpreter:
         """Recursively evaluate an AST node."""
         if node.node_type == NodeType.LITERAL:
             if isinstance(node.value, str):
+                node.value = node.value.replace('"', '')
                 try:
                     if '.' in node.value:
                         return float(node.value)
                     else:
                         return int(node.value)
-                except ValueError:
+                except:
                     return node.value  # Return as string if conversion fails
         elif node.node_type == NodeType.EXPRESSION:
             if node.children:
@@ -42,8 +43,15 @@ class ASTInterpreter:
         
             # Handle specific operations
             values = [self.evaluate_node(child) for child in node.children]
+            # print(values)
             if None in values:
                 raise ValueError(f"Operation '{node.value}' has NoneType operand(s): {values}")
+            elif any(isinstance(value, str) and (value == 'WIN' or value == 'FAIL') for value in values):
+                for i in range(len(values)):
+                    if values[i] == 'WIN':
+                        values[i] = 1
+                    elif values[i] == 'FAIL':
+                        values[i] = 0
             elif any(isinstance(value, str) for value in values):
                 raise TypeError(f"Cannot perform operation '{node.value}' with string operands: {values}")
             
@@ -70,6 +78,8 @@ class ASTInterpreter:
                 return max(values)
             elif node.value == "SMALLR":
                 return min(values)
+            elif node.value == "MOD":
+                return values[0] % values[1]
         # elif node.node_type == NodeType.VARIABLE:
         #     var_details = self.symbol_table.variables.get(node.value)
         #     if var_details:
@@ -113,9 +123,12 @@ class ASTInterpreter:
         elif node.node_type == NodeType.PRINT:
             if not node.children:
                 raise ValueError("PRINT node must have a child to print.")
-            value = self.evaluate_node(node.children[0])
-            self.update_to_symbol_table('IT', value)
-            print(value)
+            # Evaluate all children and join their values into a single line
+            values_to_print = [str(self.evaluate_node(child)) for child in node.children]
+            concatenated_output = " ".join(values_to_print)  # Join with a space
+            
+            self.update_to_symbol_table('IT', concatenated_output)
+            print(concatenated_output)
 
         elif node.node_type == NodeType.INPUT:
             if not node.children or len(node.children) < 1:
@@ -246,7 +259,7 @@ class LOLCODECompilerGUI:
     def __init__(self, master):
         self.master = master
         master.title("LOLCODE Compiler")
-        master.geometry("1200x800")
+        master.geometry("1200x900")
         
         # Create main frame
         self.main_frame = ttk.Frame(master)
@@ -286,8 +299,12 @@ class LOLCODECompilerGUI:
         editor_frame.grid(row=0, column=1, sticky='nsew', padx=5, pady=5)
         
         self.text_editor = tk.Text(editor_frame, wrap=tk.WORD, height=20)
-        self.text_editor.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
-    
+        self.text_editor.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
+        
+        text_scroll = ttk.Scrollbar(editor_frame, orient=tk.VERTICAL, command=self.text_editor.yview)
+        text_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.text_editor.config(yscrollcommand=text_scroll.set)
+        
     def setup_tokens_list(self):
         tokens_frame = ttk.LabelFrame(self.main_frame, text="Tokens")
         tokens_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
@@ -295,8 +312,12 @@ class LOLCODECompilerGUI:
         self.tokens_tree = ttk.Treeview(tokens_frame, columns=('Lexeme', 'Token'), show='headings')
         self.tokens_tree.heading('Lexeme', text='Lexeme')
         self.tokens_tree.heading('Token', text='Token')
-        self.tokens_tree.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
-    
+        self.tokens_tree.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
+        
+        tokens_scroll = ttk.Scrollbar(tokens_frame, orient=tk.VERTICAL, command=self.tokens_tree.yview)
+        tokens_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tokens_tree.config(yscrollcommand=tokens_scroll.set)
+        
     def setup_symbol_table(self):
         symbol_frame = ttk.LabelFrame(self.main_frame, text="Symbol Table")
         symbol_frame.grid(row=1, column=1, sticky='nsew', padx=5, pady=5)
@@ -305,8 +326,12 @@ class LOLCODECompilerGUI:
         self.symbol_tree.heading('Variable', text='Variable')
         self.symbol_tree.heading('Type', text='Type')
         self.symbol_tree.heading('Value', text='Value')
-        self.symbol_tree.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
-    
+        self.symbol_tree.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
+        
+        symbol_scroll = ttk.Scrollbar(symbol_frame, orient=tk.VERTICAL, command=self.symbol_tree.yview)
+        symbol_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.symbol_tree.config(yscrollcommand=symbol_scroll.set)
+        
     def setup_execute_button(self):
         execute_frame = ttk.Frame(self.main_frame)
         execute_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=5, pady=5)
@@ -319,8 +344,12 @@ class LOLCODECompilerGUI:
         console_frame.grid(row=3, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
         
         self.console = tk.Text(console_frame, wrap=tk.WORD, height=10, state='disabled')
-        self.console.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
-    
+        self.console.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
+        
+        console_scroll = ttk.Scrollbar(console_frame, orient=tk.VERTICAL, command=self.console.yview)
+        console_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self.console.config(yscrollcommand=console_scroll.set)
+        
     def open_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("LOLCODE Files", "*.lol")])
         if file_path:
