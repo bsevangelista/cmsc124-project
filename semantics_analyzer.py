@@ -7,6 +7,7 @@ from io import StringIO
 # Import the existing syntax analyzer components
 from test import LOLCODESyntaxAnalyzer, NodeType, ASTNode, SymbolTable
 from lexical_analyzer import tokenize_lolcode
+from token_classification import LEXEME_CLASSIFICATIONS
 
 class ASTInterpreter:
     def __init__(self, ast: ASTNode, symbol_table: SymbolTable, master = None):
@@ -399,6 +400,9 @@ class LOLCODECompilerGUI:
         self.master = master
         master.title("LOLCODE Compiler")
         master.geometry("1200x900")
+
+        # Initialize lexemes as an empty dictionary first
+        self.lexemes = {}
         
         # Create main frame
         self.main_frame = ttk.Frame(master)
@@ -448,14 +452,17 @@ class LOLCODECompilerGUI:
         tokens_frame = ttk.LabelFrame(self.main_frame, text="Tokens")
         tokens_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
         
-        self.tokens_tree = ttk.Treeview(tokens_frame, columns=('Lexeme', 'Token'), show='headings')
+        self.tokens_tree = ttk.Treeview(tokens_frame, columns=('Lexeme', 'Token', 'Classification'), show='headings')
         self.tokens_tree.heading('Lexeme', text='Lexeme')
         self.tokens_tree.heading('Token', text='Token')
-        self.tokens_tree.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
+        self.tokens_tree.heading('Classification', text='Classification')
+        self.tokens_tree.pack(padx=5, pady=5, fill=tk.BOTH, expand=True)
         
-        tokens_scroll = ttk.Scrollbar(tokens_frame, orient=tk.VERTICAL, command=self.tokens_tree.yview)
-        tokens_scroll.pack(side=tk.RIGHT, fill=tk.Y)
-        self.tokens_tree.config(yscrollcommand=tokens_scroll.set)
+        # Populate the Treeview with lexemes and classifications
+        if len(self.lexemes) > 0:
+            for lexeme, token in self.lexemes.items():
+                classification = LEXEME_CLASSIFICATIONS.get(lexeme, 'Unknown')
+                self.tokens_tree.insert('', 'end', values=(lexeme, token, classification))
         
     def setup_symbol_table(self):
         symbol_frame = ttk.LabelFrame(self.main_frame, text="Symbol Table")
@@ -510,10 +517,12 @@ class LOLCODECompilerGUI:
         try:
             # Tokenization
             tokens = tokenize_lolcode(code)
+            self.lexemes = {token[1]: token[0] for token in tokens}
 
             # Populate tokens list
-            for token in tokens:
-                self.tokens_tree.insert('', 'end', values=(token[1], token[0]))
+            for lexeme, token in self.lexemes.items():
+                classification = LEXEME_CLASSIFICATIONS.get(token, 'Unknown')
+                self.tokens_tree.insert('', 'end', values=(lexeme, token, classification))
 
             # Syntax Analysis
             syntax_analyzer = LOLCODESyntaxAnalyzer(tokens)
