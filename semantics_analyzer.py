@@ -377,6 +377,36 @@ class ASTInterpreter:
                     statement_list_node = child.children[0]
                     self.interpret(statement_list_node)
                     return  # Exit after ELSE block is executed
+                
+        elif node.node_type == NodeType.TYPECASTING:
+            if not node.children or len(node.children) < 1:
+                raise ValueError("TYPECASTING node must have at least one child.")
+
+            # Determine the target type for casting
+            target_type = node.value  # The target type (e.g., NUMBAR, NUMBR, TROOF, YARN, NOOB)
+            child_value = self.evaluate_node(node.children[0])  # Evaluate the child node
+
+            # Perform typecasting based on the target type
+            if target_type == "NUMBAR":  # Convert to float
+                try:
+                    casted_value = float(child_value)
+                except ValueError:
+                    raise TypeError(f"Cannot cast value '{child_value}' to NUMBAR.")
+            elif target_type == "NUMBR":  # Convert to int
+                try:
+                    casted_value = int(float(child_value))  # Handle numeric strings with decimals
+                except ValueError:
+                    raise TypeError(f"Cannot cast value '{child_value}' to NUMBR.")
+            elif target_type == "TROOF":  # Convert to boolean-like value
+                casted_value = 'WIN' if child_value else 'FAIL'
+            elif target_type == "YARN":  # Convert to string
+                casted_value = str(child_value)
+            elif target_type == "NOOB":  # Convert to null-like value
+                casted_value = "NOOB"
+            else:
+                raise ValueError(f"Unknown target type for typecasting: {target_type}")
+            self.symbol_table.update_variable("IT", 'NUMBR', casted_value)
+
         else:
             print(f"Unhandled node type: {node.node_type}")
         
