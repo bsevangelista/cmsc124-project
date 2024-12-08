@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, simpledialog
 import re
 import sys
 from io import StringIO
@@ -12,6 +12,8 @@ class ASTInterpreter:
     def __init__(self, ast: ASTNode, symbol_table: SymbolTable):
         self.ast = ast
         self.symbol_table = symbol_table
+        self.master = tk.Tk()  # Create the root window
+        self.master.withdraw()  # Hide the root window (optional)
 
     def evaluate_node(self, node: ASTNode):
         """Recursively evaluate an AST node."""
@@ -43,6 +45,8 @@ class ASTInterpreter:
             values = [self.evaluate_node(child) for child in node.children]
             if None in values:
                 raise ValueError(f"Operation '{node.value}' has NoneType operand(s): {values}")
+            elif any(isinstance(value, str) for value in values):
+                raise TypeError(f"Cannot perform operation '{node.value}' with string operands: {values}")
             
             if node.value == "SUM":
                 return sum(values)
@@ -59,7 +63,10 @@ class ASTInterpreter:
             elif node.value == "QUOSHUNT":
                 if values[1] == 0:
                     raise ZeroDivisionError("Division by zero in QUOSHUNT operation.")
-                return values[0] // values[1]
+                if any(isinstance(value, float) for value in values):
+                    return values[0] / values[1]
+                else:
+                    return values[0] // values[1]
             elif node.value == "BIGGR":
                 return max(values)
             elif node.value == "SMALLR":
@@ -75,6 +82,7 @@ class ASTInterpreter:
 
     def update_to_symbol_table(self, name, value):
         if isinstance(value, float):
+            value = round(value, 2)
             self.symbol_table.update_variable(name, 'NUMBAR', value)
         elif isinstance(value, int):
             self.symbol_table.update_variable(name, 'NUMBR', value)
@@ -85,6 +93,7 @@ class ASTInterpreter:
 
     def add_to_symbol_table(self, name, value):
         if isinstance(value, float):
+            value = round(value, 2)
             self.symbol_table.update_variable(name, 'NUMBAR', value)
         elif isinstance(value, int):
             self.symbol_table.update_variable(name, 'NUMBR', value)
@@ -108,7 +117,25 @@ class ASTInterpreter:
             value = self.evaluate_node(node.children[0])
             self.update_to_symbol_table('IT', value)
             print(value)
-        
+
+        elif node.node_type == NodeType.INPUT:
+            if not node.children or len(node.children) < 1:
+                pass
+            var_name = node.value
+            # Prompt user for input using a Tkinter popup
+            user_input = simpledialog.askstring("Input", f"Enter value for {var_name}:", parent = self.master)
+            if user_input is None:
+                raise ValueError("No input provided by the user.")
+            # Try to convert the input to an appropriate type
+            try:
+                if '.' in user_input:
+                    value = float(user_input)
+                else:
+                    value = int(user_input)
+            except ValueError:
+                value = user_input  # Treat as string if conversion fails
+            self.update_to_symbol_table(var_name, value)
+
         elif node.node_type == NodeType.DECLARATION:
             if not node.children or len(node.children) < 1:
                 pass
@@ -123,9 +150,10 @@ class ASTInterpreter:
             var_name = node.value
             value = self.evaluate_node(node.children[0])
             self.update_to_symbol_table(var_name, value)  # Update symbol table for assignments
-        
+
         else:
             print(f"Unhandled node type: {node.node_type}")
+        
 
 class SemanticAnalyzer:
     def __init__(self, ast: ASTNode, symbol_table: SymbolTable):
