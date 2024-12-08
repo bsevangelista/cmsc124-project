@@ -503,7 +503,7 @@ class LOLCODECompilerGUI:
     def __init__(self, master):
         self.master = master
         master.title("LOLCODE Compiler")
-        master.geometry("1200x900")
+        master.geometry("1200x1000")
 
         # Initialize lexemes as an empty dictionary first
         self.lexemes = {}
@@ -536,14 +536,17 @@ class LOLCODECompilerGUI:
     
     def setup_file_explorer(self):
         file_frame = ttk.LabelFrame(self.main_frame, text="File Explorer")
-        file_frame.grid(row=0, column=0, sticky='nsew', padx=5, pady=5)
-        
+        file_frame.grid(row=0, column=0, columnspan=2, sticky='nsew', padx=0, pady=0)
+
+        # Create the button with increased width and internal padding for size
         self.file_button = ttk.Button(file_frame, text="Open File", command=self.open_file)
-        self.file_button.pack(padx=5, pady=5)
+
+        # Pack the button aligned to the left with extra padding for size
+        self.file_button.pack(anchor='w', padx=10, pady=5, ipadx=10, ipady=5, fill='x')  # 'anchor=w' aligns it to the left, 'fill=x' makes it stretch
     
     def setup_text_editor(self):
         editor_frame = ttk.LabelFrame(self.main_frame, text="Text Editor")
-        editor_frame.grid(row=0, column=1, sticky='nsew', padx=5, pady=5)
+        editor_frame.grid(row=1, column=0, rowspan=2, sticky='nsew', padx=5, pady=5)
         
         self.text_editor = tk.Text(editor_frame, wrap=tk.WORD, height=20)
         self.text_editor.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
@@ -554,7 +557,7 @@ class LOLCODECompilerGUI:
         
     def setup_tokens_list(self):
         tokens_frame = ttk.LabelFrame(self.main_frame, text="Tokens")
-        tokens_frame.grid(row=1, column=0, sticky='nsew', padx=5, pady=5)
+        tokens_frame.grid(row=1, column=1, sticky='nsew', padx=5, pady=5)
         
         self.tokens_tree = ttk.Treeview(tokens_frame, columns=('Lexeme', 'Token', 'Classification'), show='headings')
         self.tokens_tree.heading('Lexeme', text='Lexeme')
@@ -573,7 +576,7 @@ class LOLCODECompilerGUI:
         
     def setup_symbol_table(self):
         symbol_frame = ttk.LabelFrame(self.main_frame, text="Symbol Table")
-        symbol_frame.grid(row=1, column=1, sticky='nsew', padx=5, pady=5)
+        symbol_frame.grid(row=2, column=1, sticky='nsew', padx=5, pady=5)
         
         self.symbol_tree = ttk.Treeview(symbol_frame, columns=('Variable', 'Type', 'Value'), show='headings')
         self.symbol_tree.heading('Variable', text='Variable')
@@ -590,21 +593,29 @@ class LOLCODECompilerGUI:
         
     def setup_execute_button(self):
         execute_frame = ttk.Frame(self.main_frame)
-        execute_frame.grid(row=2, column=0, columnspan=2, sticky='ew', padx=5, pady=5)
-        
-        self.execute_button = ttk.Button(execute_frame, text="Execute", command=self.execute_code)
-        self.execute_button.pack(pady=5)
+        execute_frame.grid(row=3, column=0, columnspan=2, sticky='ew', padx=5, pady=5)
+
+        # Create the Execute button with a custom width and increased padding for size
+        self.execute_button = ttk.Button(execute_frame, text="Execute", command=self.execute_code, width=50)
+
+        # Pack the button aligned to the left with additional internal padding
+        self.execute_button.pack(anchor='w', padx=10, pady=5, ipadx=10, ipady=5, fill='x')  # 'anchor=w' aligns it to the left, 'fill=x' stretches it
     
     def setup_console(self):
         console_frame = ttk.LabelFrame(self.main_frame, text="Console")
-        console_frame.grid(row=3, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
+        console_frame.grid(row=4, column=0, columnspan=2, sticky='nsew', padx=5, pady=5)
         
-        self.console = tk.Text(console_frame, wrap=tk.WORD, height=10, state='disabled')
+        # Create a console Text widget and configure it to fill space
+        self.console = tk.Text(console_frame, wrap=tk.WORD, state='disabled')
         self.console.pack(side=tk.LEFT, padx=5, pady=5, fill=tk.BOTH, expand=True)
         
+        # Add a vertical scrollbar
         console_scroll = ttk.Scrollbar(console_frame, orient=tk.VERTICAL, command=self.console.yview)
         console_scroll.pack(side=tk.RIGHT, fill=tk.Y)
         self.console.config(yscrollcommand=console_scroll.set)
+        
+        # Adjust row weights in the grid to make the console fill the remaining space
+        self.main_frame.rowconfigure(4, weight=1)
         
     def open_file(self):
         file_path = filedialog.askopenfilename(filetypes=[("LOLCODE Files", "*.lol")])
