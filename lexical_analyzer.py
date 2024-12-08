@@ -24,7 +24,7 @@ def tokenize_lolcode(source_code):
                 tokens.append((kind, '\\n', line_number))
             continue  # Skip whitespace and newlines
         elif kind == 'SINGLE_LINE_COMMENT':
-            comment_text = value[4:]  # Skip "BTW"
+            value[4:]  # Skip "BTW"
         elif kind == 'OBTW':
             comment = True
             start_line = line_number
