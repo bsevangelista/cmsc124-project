@@ -80,12 +80,49 @@ class ASTInterpreter:
                 return min(values)
             elif node.value == "MOD":
                 return values[0] % values[1]
+            elif node.value == "SMOOSH":
+                # Evaluate each child and convert their value to string, then concatenate
+                concatenated_string = "".join([str(self.evaluate_node(child)) for child in node.children])
+                return concatenated_string
         # elif node.node_type == NodeType.VARIABLE:
         #     var_details = self.symbol_table.variables.get(node.value)
         #     if var_details:
         #         return var_details['value']
         #     else:
         #         raise ValueError(f"Variable '{node.value}' not defined.")
+        elif node.node_type == NodeType.TYPECASTING:
+            # Ensure there is a child to evaluate
+            if not node.children or len(node.children) < 1:
+                raise ValueError("TYPECASTING node requires at least one child to evaluate.")
+
+            # Evaluate the child node
+            value = self.evaluate_node(node.children[0])
+
+            # Perform typecasting based on the target type defined in node.value
+            if node.value == "NUMBR":  # Convert to integer
+                try:
+                    return int(value)
+                except ValueError:
+                    raise ValueError(f"Cannot convert value '{value}' to integer.")
+            
+            elif node.value == "NUMBAR":  # Convert to float
+                try:
+                    return float(value)
+                except ValueError:
+                    raise ValueError(f"Cannot convert value '{value}' to float.")
+
+            elif node.value == "YARN":  # Convert to string
+                return str(value)
+            
+            elif node.value == "TROOF":
+                if value == '' or value == 0:
+                    value = 'FAIL'
+                    return str(value)
+                else:
+                    value = 'WIN'
+                    return str(value)
+            else:
+                raise ValueError(f"Unknown typecasting target '{node.value}'.")
         else:
             raise ValueError(f"Unknown node type: {node.node_type}")
 
@@ -96,20 +133,26 @@ class ASTInterpreter:
         elif isinstance(value, int):
             self.symbol_table.update_variable(name, 'NUMBR', value)
         elif isinstance(value, str):
-            self.symbol_table.update_variable(name, 'YARN', value)
+            if value == 'WIN' or value == 'FAIL':
+                self.symbol_table.update_variable(name, 'TROOF', value)
+            else:
+                self.symbol_table.update_variable(name, 'YARN', value)
         else:
             self.symbol_table.update_variable(name, 'NOOB', value)
 
     def add_to_symbol_table(self, name, value):
         if isinstance(value, float):
             value = round(value, 2)
-            self.symbol_table.update_variable(name, 'NUMBAR', value)
+            self.symbol_table.add_variable(name, 'NUMBAR', value)
         elif isinstance(value, int):
-            self.symbol_table.update_variable(name, 'NUMBR', value)
+            self.symbol_table.add_variable(name, 'NUMBR', value)
         elif isinstance(value, str):
-            self.symbol_table.update_variable(name, 'YARN', value)
+            if value == 'WIN' or value == 'FAIL':
+                self.symbol_table.add_variable(name, 'TROOF', value)
+            else:
+                self.symbol_table.add_variable(name, 'YARN', value)
         else:
-            self.symbol_table.update_variable(name, 'NOOB', value)
+            self.symbol_table.add_variable(name, 'NOOB', value)
 
     def interpret(self, node: ASTNode):
         """Interpret the AST, focusing on program logic."""
@@ -162,7 +205,42 @@ class ASTInterpreter:
             var_name = node.value
             value = self.evaluate_node(node.children[0])
             self.update_to_symbol_table(var_name, value)  # Update symbol table for assignments
+        
+        elif node.node_type == NodeType.RECASTING:
+            # Ensure there is at least one child node
+            if not node.children or len(node.children) < 1:
+                raise ValueError("RECASTING requires at least one exression to process.")
 
+            # Determine the target type from node.value
+            target_type = node.value  # Example values: 'NUMBAR', 'NUMBR', 'TROOF', 'YARN', 'NOOB'
+
+            # Evaluate the child node's value
+            value = self.evaluate_node(node.children[0])
+
+            # Handle typecasting logic
+            if target_type == "NUMBR":  # Convert to integer
+                try:
+                    recast_value = int(float(value))  # Attempt numeric conversion
+                except ValueError:
+                    recast_value = 0  # Default value on failed conversion
+            elif target_type == "NUMBAR":  # Convert to float
+                try:
+                    recast_value = float(value)
+                except ValueError:
+                    recast_value = 0.0  # Default value on failed conversion
+            elif target_type == "TROOF":  # Convert to boolean (0/1)
+                if value == '' or value == 0:
+                    recast_value = str('FAIL')
+                else:
+                    recast_value = str('WIN')
+            elif target_type == "YARN":  # Convert to string
+                recast_value = str(value)
+            elif target_type == "NOOB":  # Handle unsupported types
+                recast_value = str('NOOB')  
+            else:
+                raise ValueError(f"Unknown typecasting target: {target_type}")
+            # Update the symbol table with the recast value and its type
+            self.symbol_table.update_variable(node.children[0].value, target_type, recast_value)
         else:
             print(f"Unhandled node type: {node.node_type}")
         
