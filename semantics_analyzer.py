@@ -9,11 +9,10 @@ from test import LOLCODESyntaxAnalyzer, NodeType, ASTNode, SymbolTable
 from lexical_analyzer import tokenize_lolcode
 
 class ASTInterpreter:
-    def __init__(self, ast: ASTNode, symbol_table: SymbolTable):
+    def __init__(self, ast: ASTNode, symbol_table: SymbolTable, master = None):
         self.ast = ast
         self.symbol_table = symbol_table
-        self.master = tk.Tk()  # Create the root window
-        self.master.withdraw()  # Hide the root window (optional)
+        self.master = master
 
     def evaluate_node(self, node: ASTNode):
         """Recursively evaluate an AST node."""
@@ -365,7 +364,7 @@ class LOLCODECompilerGUI:
                     # print(var_name,details)
 
                 # Interpret and Execute Code
-                interpreter = ASTInterpreter(ast, syntax_analyzer.symbol_table)
+                interpreter = ASTInterpreter(ast, syntax_analyzer.symbol_table, master=self.master)
 
                 # Redirect stdout to capture console output
                 old_stdout = sys.stdout
@@ -374,8 +373,8 @@ class LOLCODECompilerGUI:
                 try:
                     interpreter.interpret(ast)  # Interpret the AST
                     # print(ast)
-                    for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
-                        print(var_name,details)
+                    # for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
+                    #     print(var_name,details)
                     output = redirected_output.getvalue()
                     self.console.insert(tk.END, output)
                 except Exception as e:
