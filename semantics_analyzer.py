@@ -2,6 +2,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, simpledialog
 import re
 import sys
+import copy
 from io import StringIO
 
 # Import the existing syntax analyzer components
@@ -80,68 +81,62 @@ class ASTInterpreter:
             if not node.children:
                 raise ValueError("BOOLEAN_OPERATION must have at least one child.")
 
-            operation = node.value  # This would hold AND, OR, XOR, NOT, ALL, or ANY
+            operation = node.value  # Extract boolean operation type
 
             if operation == "AND":
-                # Evaluate both expressions and compute AND logic
                 if len(node.children) != 2:
-                    raise ValueError("AND operation must have exactly two operands.")
+                    raise ValueError("AND must have exactly two operands.")
                 left = self.evaluate_node(node.children[0])
                 right = self.evaluate_node(node.children[1])
-                if bool(left) and bool(right) == True:
+                if left == 'WIN' and right == 'WIN':
                     return 'WIN'
                 else:
                     return 'FAIL'
 
             elif operation == "OR":
-                # Evaluate both expressions and compute OR logic
                 if len(node.children) != 2:
-                    raise ValueError("OR operation must have exactly two operands.")
+                    raise ValueError("OR must have exactly two operands.")
                 left = self.evaluate_node(node.children[0])
                 right = self.evaluate_node(node.children[1])
-                if bool(left) or bool(right) == True:
+                if left == 'WIN' or right == 'WIN':
                     return 'WIN'
                 else:
                     return 'FAIL'
 
             elif operation == "XOR":
-                # XOR: True if one is True and the other is False
                 if len(node.children) != 2:
-                    raise ValueError("XOR operation must have exactly two operands.")
+                    raise ValueError("XOR must have exactly two operands.")
                 left = self.evaluate_node(node.children[0])
                 right = self.evaluate_node(node.children[1])
-                if bool(left) != bool(right) == True:
+                if left != right:
                     return 'WIN'
                 else:
                     return 'FAIL'
 
             elif operation == "NOT":
-                # Unary NOT operation
                 if len(node.children) != 1:
-                    raise ValueError("NOT operation must have exactly one operand.")
+                    raise ValueError("NOT must have exactly one operand.")
                 operand = self.evaluate_node(node.children[0])
-                if not bool(operand) == True:
-                    return 'WIN'
-                else:
+                if operand == 'WIN':
                     return 'FAIL'
+                else:
+                    return 'WIN'
 
             elif operation == "ALL":
-                # Handle ALL with infinite arity
-                # Ensure no nesting of ALL or ANY within each other
-                if all(self.evaluate_node(child) for child in node.children) == True:
+                if all(self.evaluate_node(child) == 'WIN' for child in node.children):
                     return 'WIN'
                 else:
                     return 'FAIL'
 
             elif operation == "ANY":
-                # Handle ANY with infinite arity
-                if any(self.evaluate_node(child) for child in node.children) == True:
+                if any(self.evaluate_node(child) == 'WIN' for child in node.children):
                     return 'WIN'
                 else:
                     return 'FAIL'
 
             else:
                 raise ValueError(f"Unknown boolean operation: {operation}")
+
             
         elif node.node_type == NodeType.UNARY_OP:
             if not node.children or len(node.children) != 1:
@@ -149,10 +144,8 @@ class ASTInterpreter:
 
             operand_node = node.children[0]
             
-            # Handle NOT operation
             if node.value == "NOT":
                 operand_result = self.evaluate_node(operand_node)
-                # Return negation of the operand result
                 if operand_result == "FAIL":
                     return "WIN" 
                 else:
@@ -423,7 +416,7 @@ class ASTInterpreter:
                 casted_value = "NOOB"
             else:
                 raise ValueError(f"Unknown target type for typecasting: {target_type}")
-            self.symbol_table.update_variable("IT", 'NUMBR', casted_value)
+            self.symbol_table.update_variable("IT", target_type, casted_value)
 
         elif node.node_type == NodeType.SWITCH_CASE:
             if not node.children or len(node.children) < 2:
@@ -490,10 +483,61 @@ class ASTInterpreter:
                 self.update_to_symbol_table(loop_variable, loop_variable_value)
                 # self.symbol_table[loop_variable]["value"] = loop_variable_value
 
+        elif node.node_type == NodeType.FUNCTION_DEFINITION:
+            # Handle Function Definition
+            function_name = node.value
+            params = [param.value for param in node.children[0].children]
+            body = node.children[1]
+            
+            # Save the function definition into the symbol table
+            self.symbol_table.add_function(function_name, params, body)
 
+
+        elif node.node_type == NodeType.FUNCTION_CALL:
+            function_name = node.value  # Name of the function being called
+            arguments = [self.evaluate_node(arg) for arg in node.children]
+
+            # Retrieve the function definition
+            function = self.symbol_table.get_function(function_name)
+            if not function:
+                raise ValueError(f"Undefined function: {function_name}")
+
+            # Check argument count
+            if len(arguments) != len(function["params"]):
+                raise ValueError(f"Function {function_name} expects {len(function['params'])} arguments, got {len(arguments)}")
+
+            # Manage local function scope
+            local_scope = self.symbol_table.copy()  # Clone the current symbol table for local scope isolation
+            for param, arg in zip(function["params"], arguments):
+                if isinstance(arg, float):
+                    arg = round(arg, 2)
+                    local_scope.add_variable(param, 'NUMBAR', arg)
+                elif isinstance(arg, int):
+                    local_scope.add_variable(param, 'NUMBR', arg)
+                elif isinstance(arg, str):
+                    if arg == 'WIN' or arg == 'FAIL':
+                        local_scope.add_variable(param, 'TROOF', arg)
+                    else:
+                        local_scope.add_variable(param, 'YARN', arg)
+                else:
+                    local_scope.add_variable(param, 'NOOB', arg)
+                # local_scope.add_variable(param, "ANY", arg)  # Update local scope with arguments
+
+            # Temporarily switch scopes for execution
+            self.symbol_table = local_scope
+            try:
+                self.interpret(function["body"])  # Interpret the function body within this isolated scope
+            finally:
+                # Restore the original symbol table
+                self.symbol_table = local_scope  # Restore back to the parent symbol table
+                
+        elif node.node_type == NodeType.FUNCTION_RETURN:
+            # Handle function return logic
+            return_value = self.evaluate_node(node.children[0])  # Evaluate the return expression
+            self.update_to_symbol_table("IT", return_value)  # Store return value in the special variable `IT`
+            # Signal that the function has returned
         else:
             print(f"Unhandled node type: {node.node_type}")
-        
 
 class SemanticAnalyzer:
     def __init__(self, ast: ASTNode, symbol_table: SymbolTable):
@@ -518,8 +562,8 @@ class SemanticAnalyzer:
             self.check_operation(node)
         elif node.node_type == NodeType.COMPARISON:
             self.check_comparison(node)
-        elif node.node_type == NodeType.FUNCTION_CALL:
-            self.check_function_call(node)
+        # elif node.node_type == NodeType.FUNCTION_CALL:
+        #     self.check_function_call(node)
         
         # Recursively check children
         for child in node.children:
@@ -553,20 +597,20 @@ class SemanticAnalyzer:
         if len(node.children) != 2:
             self.errors.append(f"Invalid comparison: {node.value}")
     
-    def check_function_call(self, node: ASTNode):
-        """Check semantic rules for function calls"""
-        func_name = node.value
+    # def check_function_call(self, node: ASTNode):
+    #     """Check semantic rules for function calls"""
+    #     func_name = node.value
         
-        # Check if function exists
-        if func_name not in self.symbol_table.functions:
-            self.errors.append(f"Function '{func_name}' not defined")
-        else:
-            # Check argument count
-            expected_params = len(self.symbol_table.functions[func_name])
-            actual_args = len(node.children)
+    #     # Check if function exists
+    #     if func_name not in self.symbol_table.functions:
+    #         self.errors.append(f"Function '{func_name}' not defined")
+    #     else:
+    #         # Check argument count
+    #         expected_params = len(self.symbol_table.functions[func_name])
+    #         actual_args = len(node.children)
             
-            if expected_params != actual_args:
-                self.errors.append(f"Function '{func_name}' expects {expected_params} arguments, got {actual_args}")
+    #         if expected_params != actual_args:
+    #             self.errors.append(f"Function '{func_name}' expects {expected_params} arguments, got {actual_args}")
     
     def infer_type(self, node: ASTNode) -> str:
         """Infer the type of an AST node"""
@@ -710,7 +754,7 @@ class LOLCODECompilerGUI:
                 self.text_editor.insert(tk.END, code)
     
     def execute_code(self):
-    # Clear previous results
+        # Clear previous results
         self.tokens_tree.delete(*self.tokens_tree.get_children())
         self.symbol_tree.delete(*self.symbol_tree.get_children())
         self.console.config(state='normal')
@@ -733,19 +777,13 @@ class LOLCODECompilerGUI:
             syntax_analyzer = LOLCODESyntaxAnalyzer(tokens)
             ast = syntax_analyzer.parse_program()
             print(ast)
+
             # Semantic Analysis
             semantic_analyzer = SemanticAnalyzer(ast, syntax_analyzer.symbol_table)
             semantic_result = semantic_analyzer.analyze()
 
             if semantic_result:
-                # Populate Symbol Table
-                # for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
-                #     var_type = details['type']
-                #     var_value = details['value']
-                #     self.symbol_tree.insert('', 'end', values=(var_name, var_type, var_value))
-                    # print(var_name,details)
-
-                # Interpret and Execute Code
+                # Interpret and Execute Code One Node at a Time
                 interpreter = ASTInterpreter(ast, syntax_analyzer.symbol_table, master=self.master)
 
                 # Redirect stdout to capture console output
@@ -753,25 +791,33 @@ class LOLCODECompilerGUI:
                 redirected_output = sys.stdout = StringIO()
 
                 try:
-                    interpreter.interpret(ast)  # Interpret the AST
-                    # print(ast)
-                    # for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
-                    #     print(var_name,details)
-                    output = redirected_output.getvalue()
-                    self.console.insert(tk.END, output)
-                except Exception as e:
-                    self.console.insert(tk.END, f"Runtime Error: {e}\n")
+                    for node in ast.children:  # Process each child node individually
+                        try:
+                            interpreter.interpret(node)  # Interpret the current AST node
+                            output = redirected_output.getvalue()
+                            if output:
+                                self.console.insert(tk.END, output)  # Display the output
+                        except Exception as e:
+                            # Handle and display runtime error for the specific node
+                            self.console.insert(tk.END, f"Runtime Error: {e}\n")
+                            break  # Stop execution after the first error
+                        finally:
+                            # Clear the redirected output buffer
+                            redirected_output.seek(0)
+                            redirected_output.truncate(0)
+
+                        # Update Symbol Table dynamically after each node
+                        self.symbol_tree.delete(*self.symbol_tree.get_children())
+                        for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
+                            var_type = details['type']
+                            var_value = details['value']
+                            self.symbol_tree.insert('', 'end', values=(var_name, var_type, var_value))
+
+                    self.console.config(state='disabled')
+
                 finally:
                     # Restore stdout
                     sys.stdout = old_stdout
-
-                # Populate Symbol Table after interpretation
-                for var_name, details in semantic_analyzer.symbol_table.get_variables().items():
-                    var_type = details['type']
-                    var_value = details['value']
-                    self.symbol_tree.insert('', 'end', values=(var_name, var_type, var_value))
-
-                self.console.config(state='disabled')
             else:
                 # Display semantic errors
                 for error in semantic_analyzer.errors:
@@ -782,6 +828,7 @@ class LOLCODECompilerGUI:
             self.console.config(state='normal')
             self.console.insert(tk.END, f"Error: {str(e)}\n")
             self.console.config(state='disabled')
+
 
 
 def main():

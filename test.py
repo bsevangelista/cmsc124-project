@@ -3,6 +3,7 @@ from tkinter import filedialog, messagebox, ttk
 from enum import Enum, auto
 from typing import List, Tuple, Optional
 from lexical_analyzer import tokenize_lolcode 
+import copy
 
 class NodeType(Enum):
     PROGRAM = auto()
@@ -54,7 +55,7 @@ class SymbolTable:
         self.variables = {"IT":{"type": 'NOOB', "value": 'NOOB'}}
         self.functions = {}
         self.loops = {}
-    
+
     def add_variable(self, name, type: str, value: any):
         self.variables[name] = {"type": type, "value": value}
 
@@ -66,8 +67,23 @@ class SymbolTable:
         """Make the class iterable over its variables."""
         return iter(self.variables.items())
     
-    def add_function(self, name: str, params: List[str]):
-        self.functions[name] = params
+    def add_function(self, name: str, params: list, body: any):
+        """Safely add a function to the symbol table."""
+        try:
+            if body is None:
+                raise ValueError(f"Function '{name}' must have a body.")
+            # print(f"Adding function: {name}, params: {params}, body: {body}")
+            self.functions[name] = {"params": params, "body": body}
+            # print(self.functions['addNum'])
+        except Exception as e:
+            print(f"Failed to add function '{name}': {e}")
+            raise
+        
+    def get_function(self, name: str):
+        if name in self.functions:
+            return self.functions[name]
+        else:
+            raise KeyError(f"Function '{name}' not found in symbol table.")
     
     def add_loop(self, name: str):
         self.loops[name] = True
@@ -81,6 +97,24 @@ class SymbolTable:
             self.variables[name]["type"] = type
         else:
             raise KeyError(f"Variable '{name}' not found in symbol table.")
+        
+    def copy(self):
+        """Return a deep copy of the symbol table."""
+        new_copy = SymbolTable()
+        new_copy.variables = copy.deepcopy(self.variables)
+        new_copy.functions = copy.deepcopy(self.functions)
+        new_copy.loops = copy.deepcopy(self.loops)
+        return new_copy
+    
+    def update(self, new_vars: dict):
+        """
+        Update the symbol table with new variables passed in the dictionary.
+        This mimics the behavior of the built-in dictionary's update() method.
+        """
+        for key, value in new_vars.items():
+            if isinstance(value, (int, str)):
+                # Update only simple types here for safety
+                self.add_variable(key, "ANY", value)  # Add new variables safely
 
 class LOLCODESyntaxAnalyzer:
     def __init__(self, tokens: List[Tuple[str, str, int]]):
@@ -655,8 +689,9 @@ class LOLCODESyntaxAnalyzer:
         # Closing
         self.consume('IF_U_SAY_SO')
         
+        # print("here",func_name, params, body)
         # Add to symbol table
-        self.symbol_table.add_function(func_name, params)
+        # self.symbol_table.add_function(func_name, params, body)
         
         return ASTNode(NodeType.FUNCTION_DEFINITION, 
                     value=func_name, 
