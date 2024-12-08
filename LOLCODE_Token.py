@@ -1,7 +1,6 @@
 LOLToken = [
     # Comments
     ('SINGLE_LINE_COMMENT', r'BTW[^\n]*'),  # Single-line comments
-    ('MULTI_LINE_COMMENT', r'OBTW.*?TLDR'), #Multi-line comments
     
     # Keywords (Program start/end)
     ('HAI', r'\bHAI\b'),
