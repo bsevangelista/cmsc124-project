@@ -37,6 +37,73 @@ class ASTInterpreter:
                     raise ValueError(f"Variable '{node.value}' not defined.")
             else:
                 raise IndexError(f"Expression {node} {node.children} has no children.")
+        elif node.node_type == NodeType.BOOLEAN_OPERATION:
+            if not node.children:
+                raise ValueError("BOOLEAN_OPERATION must have at least one child.")
+
+            operation = node.value  # This would hold AND, OR, XOR, NOT, ALL, or ANY
+
+            if operation == "AND":
+                # Evaluate both expressions and compute AND logic
+                if len(node.children) != 2:
+                    raise ValueError("AND operation must have exactly two operands.")
+                left = self.evaluate_node(node.children[0])
+                right = self.evaluate_node(node.children[1])
+                if bool(left) and bool(right) == True:
+                    return 'WIN'
+                else:
+                    return 'FAIL'
+
+            elif operation == "OR":
+                # Evaluate both expressions and compute OR logic
+                if len(node.children) != 2:
+                    raise ValueError("OR operation must have exactly two operands.")
+                left = self.evaluate_node(node.children[0])
+                right = self.evaluate_node(node.children[1])
+                if bool(left) or bool(right) == True:
+                    return 'WIN'
+                else:
+                    return 'FAIL'
+
+            elif operation == "XOR":
+                # XOR: True if one is True and the other is False
+                if len(node.children) != 2:
+                    raise ValueError("XOR operation must have exactly two operands.")
+                left = self.evaluate_node(node.children[0])
+                right = self.evaluate_node(node.children[1])
+                if bool(left) != bool(right) == True:
+                    return 'WIN'
+                else:
+                    return 'FAIL'
+
+            elif operation == "NOT":
+                # Unary NOT operation
+                if len(node.children) != 1:
+                    raise ValueError("NOT operation must have exactly one operand.")
+                operand = self.evaluate_node(node.children[0])
+                if not bool(operand) == True:
+                    return 'WIN'
+                else:
+                    return 'FAIL'
+
+            elif operation == "ALL":
+                # Handle ALL with infinite arity
+                # Ensure no nesting of ALL or ANY within each other
+                if all(self.evaluate_node(child) for child in node.children) == True:
+                    return 'WIN'
+                else:
+                    return 'FAIL'
+
+            elif operation == "ANY":
+                # Handle ANY with infinite arity
+                if any(self.evaluate_node(child) for child in node.children) == True:
+                    return 'WIN'
+                else:
+                    return 'FAIL'
+
+            else:
+                raise ValueError(f"Unknown boolean operation: {operation}")
+
         elif node.node_type == NodeType.OPERATION:
             if len(node.children) < 2:
                 raise IndexError(f"Operation node '{node.value}' requires at least 2 operands.")
@@ -84,12 +151,6 @@ class ASTInterpreter:
                 # Evaluate each child and convert their value to string, then concatenate
                 concatenated_string = "".join([str(self.evaluate_node(child)) for child in node.children])
                 return concatenated_string
-        # elif node.node_type == NodeType.VARIABLE:
-        #     var_details = self.symbol_table.variables.get(node.value)
-        #     if var_details:
-        #         return var_details['value']
-        #     else:
-        #         raise ValueError(f"Variable '{node.value}' not defined.")
         elif node.node_type == NodeType.TYPECASTING:
             # Ensure there is a child to evaluate
             if not node.children or len(node.children) < 1:
