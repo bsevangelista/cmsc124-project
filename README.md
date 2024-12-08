@@ -79,5 +79,9 @@ To run the LOLCODE Compiler and Interpreter, follow these steps:
 
 5. The LOLCODE Compiler and Interpreter GUI will launch, allowing you to write, execute, and debug your LOLCODE programs.
 
+or
+
+1. Run LOLCODE_Interpreter.exe
+
 ## References
 - https://github.com/justinmeza/lolcode-spec/blob/master/v1.2/lolcode-spec-v1.2.md
