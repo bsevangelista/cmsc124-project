@@ -282,7 +282,7 @@ class ASTInterpreter:
                 raise ValueError("PRINT node must have a child to print.")
             # Evaluate all children and join their values into a single line
             values_to_print = [str(self.evaluate_node(child)) for child in node.children]
-            concatenated_output = " ".join(values_to_print)  # Join with a space
+            concatenated_output = "".join(values_to_print)  # Join with a space
             
             self.update_to_symbol_table('IT', concatenated_output)
             print(concatenated_output)
