@@ -6,7 +6,7 @@ import copy
 from io import StringIO
 
 # Import the existing syntax analyzer components
-from test import LOLCODESyntaxAnalyzer, NodeType, ASTNode, SymbolTable
+from syntax_analyzer import LOLCODESyntaxAnalyzer, NodeType, ASTNode, SymbolTable
 from lexical_analyzer import tokenize_lolcode
 from token_classification import LEXEME_CLASSIFICATIONS
 
