@@ -180,9 +180,15 @@ class ASTInterpreter:
                 raise TypeError(f"Cannot perform operation '{node.value}' with string operands: {values}")
             
             if node.value == "SUM":
-                return sum(values)
+                value = sum(values)
+                if isinstance(value, float):
+                    value = round(value, 2)
+                return value
             elif node.value == "DIFF":
-                return values[0] - values[1]
+                value = values[0] - values[1]
+                if isinstance(value, float):
+                    value = round(value, 2)
+                return value
             elif node.value == "PRODUKT":
                 result = 1
                 for value in values:
@@ -190,12 +196,16 @@ class ASTInterpreter:
                         result *= value
                     else:
                         raise TypeError(f"Cannot multiply non-numeric type: {type(value)}")
+                if isinstance(result, float):
+                    result = round(result, 2)
                 return result
             elif node.value == "QUOSHUNT":
                 if values[1] == 0:
                     raise ZeroDivisionError("Division by zero in QUOSHUNT operation.")
                 if any(isinstance(value, float) for value in values):
-                    return values[0] / values[1]
+                    value = values[0] / values[1]
+                    value = round(value, 2)
+                    return value
                 else:
                     return values[0] // values[1]
             elif node.value == "BIGGR":
@@ -203,7 +213,10 @@ class ASTInterpreter:
             elif node.value == "SMALLR":
                 return min(values)
             elif node.value == "MOD":
-                return values[0] % values[1]
+                value = values[0] % values[1]
+                if isinstance(value, float):
+                    value = round(value, 2)
+                return value
         elif node.node_type == NodeType.TYPECASTING:
             # Ensure there is a child to evaluate
             if not node.children or len(node.children) < 1:
@@ -437,7 +450,7 @@ class ASTInterpreter:
                         case_matched = True
                         self.interpret(case_node.children[1])  # Execute the STATEMENT_LIST
                         # Check for a BREAK statement
-                        if len(case_node.children) > 2 and case_node.children[2].node_type == NodeType.BREAK:
+                        if len(case_node.children) > 2 and case_node.children[2].value == 'BREAK':
                             return  # Exit the SWITCH_CASE
                 elif case_node.node_type == NodeType.DEFAULT_CASE:
                     # Execute the DEFAULT_CASE if no match was found
