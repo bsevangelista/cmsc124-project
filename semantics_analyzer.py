@@ -114,13 +114,20 @@ class ASTInterpreter:
             # print(values)
             if None in values:
                 raise ValueError(f"Operation '{node.value}' has NoneType operand(s): {values}")
-            elif any(isinstance(value, str) and (value == 'WIN' or value == 'FAIL') for value in values):
+            
+            if node.value == "SMOOSH":
+                # Evaluate each child and convert their value to string, then concatenate
+                concatenated_string = "".join([str(self.evaluate_node(child)) for child in node.children])
+                return concatenated_string
+            
+            # no string value at this point
+            if any(isinstance(value, str) and (value == 'WIN' or value == 'FAIL') for value in values):
                 for i in range(len(values)):
                     if values[i] == 'WIN':
                         values[i] = 1
                     elif values[i] == 'FAIL':
                         values[i] = 0
-            elif any(isinstance(value, str) for value in values):
+            if any(isinstance(value, str) for value in values):
                 raise TypeError(f"Cannot perform operation '{node.value}' with string operands: {values}")
             
             if node.value == "SUM":
@@ -148,10 +155,6 @@ class ASTInterpreter:
                 return min(values)
             elif node.value == "MOD":
                 return values[0] % values[1]
-            elif node.value == "SMOOSH":
-                # Evaluate each child and convert their value to string, then concatenate
-                concatenated_string = "".join([str(self.evaluate_node(child)) for child in node.children])
-                return concatenated_string
         elif node.node_type == NodeType.TYPECASTING:
             # Ensure there is a child to evaluate
             if not node.children or len(node.children) < 1:
