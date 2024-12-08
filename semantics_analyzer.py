@@ -407,6 +407,35 @@ class ASTInterpreter:
                 raise ValueError(f"Unknown target type for typecasting: {target_type}")
             self.symbol_table.update_variable("IT", 'NUMBR', casted_value)
 
+        elif node.node_type == NodeType.SWITCH_CASE:
+            if not node.children or len(node.children) < 2:
+                raise ValueError("SWITCH_CASE must have an expression and at least one CASE_LIST.")
+
+            # Evaluate the switch expression
+            switch_value = self.evaluate_node(node.children[0])  # The first child is the expression (e.g., choice)
+
+            # Traverse through CASE_LIST nodes
+            case_matched = False
+            for case_node in node.children[1:]:
+                if case_node.node_type == NodeType.CASE_LIST:
+                    # The first child of CASE_LIST is the case literal
+                    case_value = self.evaluate_node(case_node.children[0])
+
+                    # Check if the switch value matches the case value
+                    if switch_value == case_value:
+                        case_matched = True
+                        self.interpret(case_node.children[1])  # Execute the STATEMENT_LIST
+                        # Check for a BREAK statement
+                        if len(case_node.children) > 2 and case_node.children[2].node_type == NodeType.BREAK:
+                            return  # Exit the SWITCH_CASE
+                elif case_node.node_type == NodeType.DEFAULT_CASE:
+                    # Execute the DEFAULT_CASE if no match was found
+                    if not case_matched:
+                        self.interpret(case_node.children[0])  # Execute the STATEMENT_LIST
+                        return
+
+            # If no match and no DEFAULT_CASE, do nothing
+
         else:
             print(f"Unhandled node type: {node.node_type}")
         

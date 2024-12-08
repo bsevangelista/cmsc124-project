@@ -31,6 +31,8 @@ class NodeType(Enum):
     ELSEIF_STATEMENT = auto()
     ELSE_STATEMENT = auto()
     IF_STATEMENT = auto()
+    CASE_LIST = auto()
+    DEFAULT_CASE = auto()
 
 class ASTNode:
     def __init__(self, node_type: NodeType, value: Optional[str] = None, token_type=None, children: Optional[List['ASTNode']] = None):
@@ -554,7 +556,7 @@ class LOLCODESyntaxAnalyzer:
                 case_block.append(self.parse_statement())
                 self.expect_newline()
 
-            cases.append(ASTNode(NodeType.STATEMENT_LIST, children=[
+            cases.append(ASTNode(NodeType.CASE_LIST, children=[
                 case_value, ASTNode(NodeType.STATEMENT_LIST, children=case_block)
             ]))
 
@@ -568,7 +570,7 @@ class LOLCODESyntaxAnalyzer:
                 default_case_block.append(self.parse_statement())
                 self.expect_newline()
 
-            default_case = ASTNode(NodeType.STATEMENT_LIST, children=default_case_block)
+            default_case = ASTNode(NodeType.DEFAULT_CASE, children=default_case_block)
 
         # Consume OIC to close the switch-case statement
         if self.peek() and self.peek()[0] == 'OIC':
@@ -818,6 +820,7 @@ class LOLCODEParserGUI:
             # Parse
             analyzer = LOLCODESyntaxAnalyzer(tokens)
             ast = analyzer.parse_program()
+            print(ast)
 
             # Display AST
             self.ast_text.insert(tk.END, "ABSTRACT SYNTAX TREE:\n")
