@@ -600,7 +600,7 @@ class LOLCODESyntaxAnalyzer:
         
         # Consume YR and variable identifier
         self.consume('YR')
-        var_token = self.consume('VAR_ID')
+        var_token = self.consume('VAR_ID')[1]
         
         # Optional condition (TIL or WILE)
         condition = None
@@ -632,6 +632,7 @@ class LOLCODESyntaxAnalyzer:
         
         return ASTNode(NodeType.LOOP, value=loop_name, children=[
             ASTNode(NodeType.LITERAL, value=mode),
+            ASTNode(NodeType.EXPRESSION, value=var_token),
             condition,
             body
         ])

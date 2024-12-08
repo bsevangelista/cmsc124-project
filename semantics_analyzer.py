@@ -142,6 +142,24 @@ class ASTInterpreter:
 
             else:
                 raise ValueError(f"Unknown boolean operation: {operation}")
+            
+        elif node.node_type == NodeType.UNARY_OP:
+            if not node.children or len(node.children) != 1:
+                raise ValueError("Unary operation must have exactly one child node.")
+
+            operand_node = node.children[0]
+            
+            # Handle NOT operation
+            if node.value == "NOT":
+                operand_result = self.evaluate_node(operand_node)
+                # Return negation of the operand result
+                if operand_result == "FAIL":
+                    return "WIN" 
+                else:
+                    return "FAIL"
+
+            else:
+                raise ValueError(f"Unknown unary operation: {node.value}")
 
         elif node.node_type == NodeType.OPERATION:
             if len(node.children) < 2:
@@ -433,8 +451,45 @@ class ASTInterpreter:
                     if not case_matched:
                         self.interpret(case_node.children[0])  # Execute the STATEMENT_LIST
                         return
-
             # If no match and no DEFAULT_CASE, do nothing
+
+        elif node.node_type == NodeType.LOOP:
+            # if len(node.children) < 4:
+            #     raise ValueError("LOOP node must have a direction, loop variable, condition, and statement list.")
+
+            direction = node.children[0].value  # "UPPIN" or "NERFIN"
+            loop_variable_node = node.children[1]  # Loop variable
+            condition_node = node.children[2]  # Loop condition
+            statement_list_node = node.children[3]  # Statements to execute in the loop
+
+            # Get the initial value of the loop variable
+            loop_variable = loop_variable_node.value
+            var_details = self.symbol_table.variables.get(loop_variable)
+            loop_variable_value = var_details["value"]
+
+            while True:
+                # Evaluate the loop condition
+                condition_result = self.evaluate_node(condition_node)
+
+                # Break the loop if the condition is not met
+                if condition_result != "WIN":
+                    break
+
+                # Execute the loop body
+                self.interpret(statement_list_node)
+
+                # Update the loop variable
+                if direction == "UPPIN":
+                    loop_variable_value += 1
+                elif direction == "NERFIN":
+                    loop_variable_value -= 1
+                else:
+                    raise ValueError(f"Unknown loop direction: {direction}")
+
+                # Update the symbol table with the new value of the loop variable
+                self.update_to_symbol_table(loop_variable, loop_variable_value)
+                # self.symbol_table[loop_variable]["value"] = loop_variable_value
+
 
         else:
             print(f"Unhandled node type: {node.node_type}")
